@@ -22,6 +22,14 @@ sh scripts/stop.sh
 
 Open `http://localhost:8000` after starting.
 
+Sign in with:
+
+- Username: `user`
+- Password: `password`
+
+This is local MVP authentication only. Sessions are kept in server memory and
+are not intended for production use.
+
 ## Tests
 
 Frontend:

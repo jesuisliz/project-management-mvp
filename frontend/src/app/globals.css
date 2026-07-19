@@ -47,6 +47,13 @@ body {
     linear-gradient(130deg, #032147 0%, #123d72 52%, #753991 120%);
 }
 
+.auth-page {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(32, 157, 215, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 82%, rgba(139, 92, 246, 0.16), transparent 30%),
+    linear-gradient(145deg, #edf6fb 0%, #f5f1fa 100%);
+}
+
 .column-chip {
   border: 1px solid color-mix(in srgb, var(--column-accent) 50%, transparent);
   background: color-mix(in srgb, var(--column-accent) 16%, transparent);

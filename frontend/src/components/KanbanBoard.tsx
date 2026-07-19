@@ -23,7 +23,19 @@ const columnAccents = [
   "#16a085",
 ];
 
-export const KanbanBoard = () => {
+type KanbanBoardProps = {
+  username?: string;
+  onLogout?: () => void;
+  isLoggingOut?: boolean;
+  authError?: string | null;
+};
+
+export const KanbanBoard = ({
+  username,
+  onLogout,
+  isLoggingOut = false,
+  authError,
+}: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
@@ -127,13 +139,35 @@ export const KanbanBoard = () => {
                 and capture quick notes without getting buried in settings.
               </p>
             </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-white">
-                One board. Five columns. Zero clutter.
-              </p>
+            <div className="flex min-w-[280px] flex-col gap-4">
+              {username && onLogout ? (
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 backdrop-blur-sm">
+                  <p className="text-sm text-white/70">
+                    Signed in as <strong className="text-white">{username}</strong>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    disabled={isLoggingOut}
+                    className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoggingOut ? "Logging out..." : "Log out"}
+                  </button>
+                </div>
+              ) : null}
+              <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
+                  Focus
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  One board. Five columns. Zero clutter.
+                </p>
+              </div>
+              {authError ? (
+                <p role="alert" className="text-sm font-medium text-[#ffd6d1]">
+                  {authError}
+                </p>
+              ) : null}
             </div>
           </div>
           <div>

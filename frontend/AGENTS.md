@@ -20,7 +20,8 @@ Use npm and keep `package-lock.json` in sync with `package.json`.
 ## Structure
 
 - `src/app/layout.tsx`: root layout, metadata, and font setup
-- `src/app/page.tsx`: renders the single `KanbanBoard`
+- `src/app/page.tsx`: renders the authenticated application shell
+- `src/components/AuthApp.tsx`: session bootstrap, login, and logout state
 - `src/app/globals.css`: global styles, Tailwind import, and color tokens
 - `src/components/KanbanBoard.tsx`: client-side board state and board operations
 - `src/components/KanbanColumn.tsx`: droppable column, editable title, cards, and add-card form
@@ -34,14 +35,20 @@ Use npm and keep `package-lock.json` in sync with `package.json`.
 
 ## Current behavior
 
-The demo renders one board with five fixed columns. A user can:
+The app requires the local MVP credentials before rendering one board with five
+fixed columns. An authenticated user can:
 
 - rename a column inline;
 - add a card with a required title and optional details;
 - remove a card; and
 - reorder cards or move them between columns with drag and drop.
 
-The frontend does not yet provide authentication, persistence, API calls, card editing, AI chat, or error/loading states. Do not treat the hardcoded data in `src/lib/kanban.ts` as a database contract; the database design will be approved separately.
+Authentication uses the FastAPI session endpoints and an HTTP-only cookie; the
+frontend must not persist credentials or session tokens. Board state is still
+held in React memory and resets on reload. The frontend does not yet provide
+board persistence, card editing, AI chat, or board API integration. Do not treat
+the hardcoded data in `src/lib/kanban.ts` as a database contract; the database
+design will be approved separately.
 
 ## Conventions
 

@@ -111,15 +111,15 @@ Require the hardcoded MVP credentials `user` / `password` before showing the boa
 
 ### Checklist
 
-- [ ] Add login, logout, and current-session API routes.
-- [ ] Validate only the hardcoded MVP credentials and return a generic error for invalid credentials.
-- [ ] Store authentication in an HTTP-only, same-site cookie so frontend code does not persist a password or bearer token.
-- [ ] Protect board API namespaces in preparation for later parts, while leaving health checks public.
-- [ ] Add a frontend session bootstrap state so the board is not shown before authentication is known.
-- [ ] Add an accessible login form with username, password, submit state, and invalid-credentials feedback.
-- [ ] Show the signed-in username and a logout action in the board UI.
-- [ ] Return to the login view after logout and after an unauthorized session response.
-- [ ] Document that this is local MVP authentication, not production-grade identity management.
+- [x] Add login, logout, and current-session API routes.
+- [x] Validate only the hardcoded MVP credentials and return a generic error for invalid credentials.
+- [x] Store authentication in an HTTP-only, same-site cookie so frontend code does not persist a password or bearer token.
+- [x] Protect board API namespaces in preparation for later parts, while leaving health checks public.
+- [x] Add a frontend session bootstrap state so the board is not shown before authentication is known.
+- [x] Add an accessible login form with username, password, submit state, and invalid-credentials feedback.
+- [x] Show the signed-in username and a logout action in the board UI.
+- [x] Return to the login view after logout and after an unauthorized session response.
+- [x] Document that this is local MVP authentication, not production-grade identity management.
 
 ### Tests
 
