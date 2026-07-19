@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -14,6 +14,14 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+
+const columnAccents = [
+  "#209dd7",
+  "#8b5cf6",
+  "#ecad0a",
+  "#f26b5b",
+  "#16a085",
+];
 
 export const KanbanBoard = () => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
@@ -52,6 +60,14 @@ export const KanbanBoard = () => {
         column.id === columnId ? { ...column, title } : column
       ),
     }));
+  };
+
+  const focusColumnTitle = (columnId: string) => {
+    const input = document.getElementById(`column-title-${columnId}`);
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+      input.select();
+    }
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
@@ -93,43 +109,54 @@ export const KanbanBoard = () => {
 
   return (
     <div className="relative overflow-hidden">
-      <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(117,57,145,0.18)_0%,_rgba(117,57,145,0.05)_55%,_transparent_75%)]" />
+      <div className="pointer-events-none absolute left-0 top-0 h-[460px] w-[460px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.28)_0%,_rgba(32,157,215,0.05)_58%,_transparent_72%)]" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-[560px] w-[560px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(139,92,246,0.2)_0%,_rgba(117,57,145,0.04)_58%,_transparent_75%)]" />
 
       <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-10 px-6 pb-16 pt-12">
-        <header className="flex flex-col gap-6 rounded-[32px] border border-[var(--stroke)] bg-white/80 p-8 shadow-[var(--shadow)] backdrop-blur">
+        <header className="board-hero flex flex-col gap-7 overflow-hidden rounded-[32px] p-8 text-white shadow-[var(--shadow-strong)]">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/65">
                 Single Board Kanban
               </p>
-              <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
+              <h1 className="mt-3 font-display text-4xl font-semibold text-white">
                 Kanban Studio
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--gray-text)]">
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/70">
                 Keep momentum visible. Rename columns, drag cards between stages,
                 and capture quick notes without getting buried in settings.
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
                 Focus
               </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
+              <p className="mt-2 text-lg font-semibold text-white">
                 One board. Five columns. Zero clutter.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            {board.columns.map((column) => (
-              <div
-                key={column.id}
-                className="flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--navy-dark)]"
-              >
-                <span className="h-2 w-2 rounded-full bg-[var(--accent-yellow)]" />
-                {column.title}
-              </div>
-            ))}
+          <div>
+            <p className="mb-3 text-xs font-medium text-white/65">
+              Select a column below to rename it
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {board.columns.map((column, index) => (
+                <button
+                  key={column.id}
+                  type="button"
+                  onClick={() => focusColumnTitle(column.id)}
+                  aria-label={`Rename ${column.title} column`}
+                  className="column-chip flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
+                  style={{
+                    "--column-accent": columnAccents[index],
+                  } as CSSProperties}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full bg-[var(--column-accent)] shadow-[0_0_12px_var(--column-accent)]" />
+                  {column.title}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
 
@@ -141,10 +168,11 @@ export const KanbanBoard = () => {
           onDragEnd={handleDragEnd}
         >
           <section className="grid gap-6 lg:grid-cols-5">
-            {board.columns.map((column) => (
+            {board.columns.map((column, index) => (
               <KanbanColumn
                 key={column.id}
                 column={column}
+                accent={columnAccents[index]}
                 cards={column.cardIds.map((cardId) => board.cards[cardId])}
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}

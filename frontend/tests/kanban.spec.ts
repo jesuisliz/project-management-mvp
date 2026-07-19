@@ -19,8 +19,14 @@ test("renames a column", async ({ page }) => {
   await page.goto("/");
   const firstColumn = page.locator('[data-testid^="column-"]').first();
   const title = firstColumn.getByLabel("Column title");
-  await title.fill("Ideas");
-  await expect(title).toHaveValue("Ideas");
+  await page.getByRole("button", { name: "Rename Backlog column" }).click();
+  await expect(title).toBeFocused();
+  await title.pressSequentially("TO DO");
+  await title.press("Tab");
+  await expect(title).toHaveValue("TO DO");
+  await expect(
+    page.getByRole("button", { name: "Rename TO DO column" })
+  ).toBeVisible();
 });
 
 test("adds and removes a card", async ({ page }) => {

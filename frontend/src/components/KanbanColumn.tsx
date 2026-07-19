@@ -1,12 +1,14 @@
 import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import type { CSSProperties } from "react";
 import type { Card, Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
 
 type KanbanColumnProps = {
   column: Column;
+  accent: string;
   cards: Card[];
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
@@ -15,6 +17,7 @@ type KanbanColumnProps = {
 
 export const KanbanColumn = ({
   column,
+  accent,
   cards,
   onRename,
   onAddCard,
@@ -26,24 +29,34 @@ export const KanbanColumn = ({
     <section
       ref={setNodeRef}
       className={clsx(
-        "flex min-h-[520px] flex-col rounded-3xl border border-[var(--stroke)] bg-[var(--surface-strong)] p-4 shadow-[var(--shadow)] transition",
-        isOver && "ring-2 ring-[var(--accent-yellow)]"
+        "column-shell flex min-h-[520px] flex-col rounded-3xl border p-4 shadow-[var(--shadow)] transition",
+        isOver && "-translate-y-1 ring-2 ring-[var(--column-accent)]"
       )}
+      style={{ "--column-accent": accent } as CSSProperties}
       data-testid={`column-${column.id}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="w-full">
           <div className="flex items-center gap-3">
-            <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
+            <div className="h-2 w-10 rounded-full bg-[var(--column-accent)] shadow-[0_0_14px_var(--column-accent)]" />
+            <span className="rounded-full bg-white/75 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+              {cards.length} {cards.length === 1 ? "card" : "cards"}
             </span>
           </div>
+          <label
+            htmlFor={`column-title-${column.id}`}
+            className="mt-4 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]"
+          >
+            <span>Column name</span>
+            <span className="text-[var(--column-accent)]">Click to rename</span>
+          </label>
           <input
+            id={`column-title-${column.id}`}
             value={column.title}
             onChange={(event) => onRename(column.id, event.target.value)}
-            className="mt-3 w-full bg-transparent font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
+            className="column-title-input mt-1.5 w-full rounded-xl border bg-white/80 px-3 py-2 font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
             aria-label="Column title"
+            title="Click to rename this column"
           />
         </div>
       </div>

@@ -14,9 +14,15 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard />);
     const column = getFirstColumn();
     const input = within(column).getByLabelText("Column title");
-    await userEvent.clear(input);
-    await userEvent.type(input, "New Name");
-    expect(input).toHaveValue("New Name");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Rename Backlog column" })
+    );
+    expect(input).toHaveFocus();
+    await userEvent.keyboard("TO DO");
+    expect(input).toHaveValue("TO DO");
+    expect(
+      screen.getByRole("button", { name: "Rename TO DO column" })
+    ).toBeInTheDocument();
   });
 
   it("adds and removes a card", async () => {

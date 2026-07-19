@@ -4,12 +4,16 @@
   --accent-yellow: #ecad0a;
   --primary-blue: #209dd7;
   --secondary-purple: #753991;
+  --accent-violet: #8b5cf6;
+  --accent-coral: #f26b5b;
+  --accent-teal: #16a085;
   --navy-dark: #032147;
-  --gray-text: #888888;
-  --surface: #f7f8fb;
+  --gray-text: #65758b;
+  --surface: #eef4fa;
   --surface-strong: #ffffff;
-  --stroke: rgba(3, 33, 71, 0.08);
-  --shadow: 0 18px 40px rgba(3, 33, 71, 0.12);
+  --stroke: rgba(3, 33, 71, 0.11);
+  --shadow: 0 16px 38px rgba(3, 33, 71, 0.11);
+  --shadow-strong: 0 24px 60px rgba(3, 33, 71, 0.22);
 }
 
 @theme inline {
@@ -23,7 +27,10 @@
 }
 
 body {
-  background: var(--surface);
+  background:
+    linear-gradient(135deg, rgba(32, 157, 215, 0.08), transparent 42%),
+    linear-gradient(315deg, rgba(139, 92, 246, 0.08), transparent 45%),
+    var(--surface);
   color: var(--navy-dark);
   font-family: var(--font-body), "Segoe UI", sans-serif;
   margin: 0;
@@ -31,4 +38,68 @@ body {
 
 .font-display {
   font-family: var(--font-display), "Segoe UI", sans-serif;
+}
+
+.board-hero {
+  background:
+    radial-gradient(circle at 92% 8%, rgba(236, 173, 10, 0.28), transparent 25%),
+    radial-gradient(circle at 65% 100%, rgba(32, 157, 215, 0.36), transparent 38%),
+    linear-gradient(130deg, #032147 0%, #123d72 52%, #753991 120%);
+}
+
+.column-chip {
+  border: 1px solid color-mix(in srgb, var(--column-accent) 50%, transparent);
+  background: color-mix(in srgb, var(--column-accent) 16%, transparent);
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.column-chip:hover,
+.column-chip:focus-visible {
+  border-color: var(--column-accent);
+  background: color-mix(in srgb, var(--column-accent) 28%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.column-shell {
+  border-color: color-mix(in srgb, var(--column-accent) 24%, var(--stroke));
+  border-top: 4px solid var(--column-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--column-accent) 9%, white) 0,
+    rgba(255, 255, 255, 0.78) 150px
+  );
+  backdrop-filter: blur(10px);
+}
+
+.column-title-input {
+  border-color: color-mix(in srgb, var(--column-accent) 28%, var(--stroke));
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.column-title-input:hover {
+  border-color: var(--column-accent);
+  background: white;
+}
+
+.column-title-input:focus {
+  border-color: var(--column-accent);
+  background: white;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--column-accent) 18%, transparent);
+}
+
+.card-surface {
+  border-color: color-mix(in srgb, var(--column-accent) 10%, var(--stroke));
+}
+
+.add-card-button {
+  border-color: color-mix(in srgb, var(--column-accent) 42%, transparent);
+  color: var(--column-accent);
+}
+
+.add-card-button:hover,
+.add-card-button:focus-visible {
+  border-color: var(--column-accent);
+  background: color-mix(in srgb, var(--column-accent) 8%, white);
+  outline: none;
 }
