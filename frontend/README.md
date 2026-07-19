@@ -1,9 +1,11 @@
 # Kanban Studio
 
+This Next.js app is exported to `out/` and served by the FastAPI container.
+
 ## Run
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -11,5 +13,6 @@ npm run dev
 
 ```bash
 npm run test:unit
+npm run build
 npm run test:e2e
 ```

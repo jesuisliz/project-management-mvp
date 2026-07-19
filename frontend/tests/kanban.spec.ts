@@ -1,12 +1,29 @@
 import { expect, test } from "@playwright/test";
 
 test("loads the kanban board", async ({ page }) => {
+  const fontStatuses: number[] = [];
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname.endsWith(".woff2")) {
+      fontStatuses.push(response.status());
+    }
+  });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+  await page.evaluate(() => document.fonts.ready);
+  expect(fontStatuses.length).toBeGreaterThan(0);
+  expect(fontStatuses.every((status) => status === 200)).toBe(true);
 });
 
-test("adds a card to a column", async ({ page }) => {
+test("renames a column", async ({ page }) => {
+  await page.goto("/");
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  const title = firstColumn.getByLabel("Column title");
+  await title.fill("Ideas");
+  await expect(title).toHaveValue("Ideas");
+});
+
+test("adds and removes a card", async ({ page }) => {
   await page.goto("/");
   const firstColumn = page.locator('[data-testid^="column-"]').first();
   await firstColumn.getByRole("button", { name: /add a card/i }).click();
@@ -14,6 +31,10 @@ test("adds a card to a column", async ({ page }) => {
   await firstColumn.getByPlaceholder("Details").fill("Added via e2e.");
   await firstColumn.getByRole("button", { name: /add card/i }).click();
   await expect(firstColumn.getByText("Playwright card")).toBeVisible();
+  await firstColumn
+    .getByRole("button", { name: "Delete Playwright card", exact: true })
+    .click();
+  await expect(firstColumn.getByText("Playwright card")).toBeHidden();
 });
 
 test("moves a card between columns", async ({ page }) => {

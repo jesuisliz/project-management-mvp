@@ -1,0 +1,21 @@
+[project]
+name = "project-management-mvp"
+version = "0.1.0"
+description = "Local project management MVP"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2",
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+
+[tool.uv]
+package = false

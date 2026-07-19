@@ -134,6 +134,7 @@ export const KanbanBoard = () => {
         </header>
 
         <DndContext
+          id="kanban-board-dnd"
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
