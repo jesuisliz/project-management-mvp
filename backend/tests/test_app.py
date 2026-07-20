@@ -1,10 +1,13 @@
 import json
 from pathlib import Path
 import re
+import sqlite3
+import time
 
 from fastapi.testclient import TestClient
 import pytest
 
+from backend import main as main_module
 from backend.database import get_board, provision_user
 from backend.main import SESSION_COOKIE, active_sessions
 
@@ -351,7 +354,7 @@ def test_session_is_scoped_to_its_users_board(
 ) -> None:
     provision_user(database_path, "other-user")
     token = "other-user-session"
-    active_sessions[token] = "other-user"
+    active_sessions[token] = ("other-user", time.time() + 3600)
     client.cookies.set(SESSION_COOKIE, token)
 
     response = client.patch(
@@ -362,3 +365,86 @@ def test_session_is_scoped_to_its_users_board(
     assert response.status_code == 200
     assert response.json()["columns"][0]["title"] == "Other backlog"
     assert get_board(database_path, "user")["columns"][0]["title"] == "Backlog"
+
+
+def test_expired_session_is_rejected_and_purged(client: TestClient) -> None:
+    login(client)
+    token = client.cookies.get(SESSION_COOKIE)
+    username, _ = active_sessions[token]
+    active_sessions[token] = (username, 0.0)
+
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 401
+    assert token not in active_sessions
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    (
+        (
+            "patch",
+            "/api/board/columns/col-backlog",
+            {"title": "x" * 201},
+        ),
+        (
+            "post",
+            "/api/board/cards",
+            {
+                "columnId": "col-backlog",
+                "title": "x" * 201,
+                "details": "",
+            },
+        ),
+        (
+            "post",
+            "/api/board/cards",
+            {
+                "columnId": "col-backlog",
+                "title": "Card",
+                "details": "x" * 4_001,
+            },
+        ),
+        (
+            "patch",
+            "/api/board/cards/card-1",
+            {"title": "x" * 201, "details": "Details"},
+        ),
+        (
+            "patch",
+            "/api/board/cards/card-1",
+            {"title": "Card", "details": "x" * 4_001},
+        ),
+    ),
+)
+def test_oversized_title_or_details_is_rejected(
+    client: TestClient,
+    method: str,
+    path: str,
+    payload: dict[str, object],
+) -> None:
+    login(client)
+
+    response = client.request(method, path, json=payload)
+
+    assert response.status_code == 422
+
+
+def test_database_busy_returns_a_safe_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    login(client)
+
+    def locked(*_: object, **__: object) -> None:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(main_module, "rename_column", locked)
+
+    response = client.patch(
+        "/api/board/columns/col-backlog",
+        json={"title": "Ready"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The board is busy. Please try again."}

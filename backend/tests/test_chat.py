@@ -7,6 +7,8 @@ import pytest
 from backend import main as main_module
 from backend.ai import AIConfigurationError, AIServiceError
 from backend.chat import (
+    MAX_CARD_DETAILS_LENGTH,
+    MAX_CARD_TITLE_LENGTH,
     CardOperation,
     StructuredChatResponse,
     safety_identifier,
@@ -166,6 +168,32 @@ def test_structured_chat_schema_rejects_fields_for_other_operations(
 ) -> None:
     with pytest.raises(ValidationError):
         CardOperation.model_validate(payload)
+
+
+def test_structured_chat_schema_rejects_oversized_title_or_details() -> None:
+    with pytest.raises(ValidationError):
+        CardOperation.model_validate(
+            {
+                "type": "create_card",
+                "card_id": None,
+                "column_id": "col-backlog",
+                "title": "x" * (MAX_CARD_TITLE_LENGTH + 1),
+                "details": "Details",
+                "position": None,
+            }
+        )
+
+    with pytest.raises(ValidationError):
+        CardOperation.model_validate(
+            {
+                "type": "create_card",
+                "card_id": None,
+                "column_id": "col-backlog",
+                "title": "New task",
+                "details": "x" * (MAX_CARD_DETAILS_LENGTH + 1),
+                "position": None,
+            }
+        )
 
 
 def test_chat_uses_authoritative_board_and_bounded_history(

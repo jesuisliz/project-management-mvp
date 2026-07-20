@@ -33,3 +33,16 @@ RUN uv sync --locked
 CMD ["uv", "run", "--no-sync", "pytest"]
 
 FROM base AS production
+
+RUN groupadd --system app \
+    && useradd --system --create-home --gid app app \
+    && mkdir -p /app/data \
+    && chown -R app:app /app \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 import secrets
+import sqlite3
+import time
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -12,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from backend.ai import AIConfigurationError, AIService, AIServiceError
 from backend.chat import (
+    MAX_CARD_DETAILS_LENGTH,
+    MAX_CARD_TITLE_LENGTH,
     MAX_HISTORY_MESSAGES,
     MAX_MESSAGE_LENGTH,
     StructuredChatResponse,
@@ -43,7 +47,7 @@ SESSION_MAX_AGE = 8 * 60 * 60
 MVP_PASSWORD = "password"
 DEFAULT_DATABASE_PATH = Path("data") / "pm.db"
 
-active_sessions: dict[str, str] = {}
+active_sessions: dict[str, tuple[str, float]] = {}
 
 NonBlankText = Annotated[
     str,
@@ -57,6 +61,18 @@ ChatText = Annotated[
         min_length=1,
         max_length=MAX_MESSAGE_LENGTH,
     ),
+]
+TitleText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_CARD_TITLE_LENGTH,
+    ),
+]
+DetailsText = Annotated[
+    str,
+    StringConstraints(max_length=MAX_CARD_DETAILS_LENGTH),
 ]
 
 
@@ -92,18 +108,18 @@ class BoardResponse(ApiModel):
 
 
 class RenameColumnRequest(ApiModel):
-    title: NonBlankText
+    title: TitleText
 
 
 class CreateCardRequest(ApiModel):
     column_id: NonBlankText = Field(alias="columnId")
-    title: NonBlankText
-    details: str = ""
+    title: TitleText
+    details: DetailsText = ""
 
 
 class EditCardRequest(ApiModel):
-    title: NonBlankText
-    details: str
+    title: TitleText
+    details: DetailsText
 
 
 class MoveCardRequest(ApiModel):
@@ -134,9 +150,21 @@ def _database_path() -> Path:
     return Path(os.environ.get("DATABASE_PATH", DEFAULT_DATABASE_PATH))
 
 
+def _resolve_session(token: str | None) -> str | None:
+    if token is None:
+        return None
+    session = active_sessions.get(token)
+    if session is None:
+        return None
+    username, expires_at = session
+    if time.time() >= expires_at:
+        active_sessions.pop(token, None)
+        return None
+    return username
+
+
 def _authenticated_username(request: Request) -> str:
-    token = request.cookies.get(SESSION_COOKIE)
-    username = active_sessions.get(token) if token is not None else None
+    username = _resolve_session(request.cookies.get(SESSION_COOKIE))
     if username is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     return username
@@ -174,6 +202,13 @@ def create_app(
             content={"detail": "Invalid destination position"},
         )
 
+    @api.exception_handler(sqlite3.OperationalError)
+    def database_busy(_: Request, __: sqlite3.OperationalError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "The board is busy. Please try again."},
+        )
+
     @api.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -193,7 +228,7 @@ def create_app(
             )
 
         token = secrets.token_urlsafe(32)
-        active_sessions[token] = MVP_USERNAME
+        active_sessions[token] = (MVP_USERNAME, time.time() + SESSION_MAX_AGE)
         response.set_cookie(
             key=SESSION_COOKIE,
             value=token,
@@ -210,7 +245,7 @@ def create_app(
         token = request.cookies.get(SESSION_COOKIE)
         if token is None:
             return SessionResponse(authenticated=False)
-        username = active_sessions.get(token)
+        username = _resolve_session(token)
         if username is None:
             return JSONResponse(
                 status_code=401,
@@ -383,8 +418,7 @@ def create_app(
             or path.startswith("/api/ai/")
         )
         if is_protected:
-            token = request.cookies.get(SESSION_COOKIE)
-            if token not in active_sessions:
+            if _resolve_session(request.cookies.get(SESSION_COOKIE)) is None:
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Authentication required"},

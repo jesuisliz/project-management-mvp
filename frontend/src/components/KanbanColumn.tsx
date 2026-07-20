@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useRef, useState, type CSSProperties } from "react";
-import type { Card, Column } from "@/lib/kanban";
+import { MAX_TITLE_LENGTH, type Card, type Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
 
@@ -93,6 +93,7 @@ export const KanbanColumn = ({
               }
             }}
             disabled={isMutating}
+            maxLength={MAX_TITLE_LENGTH}
             className="column-title-input mt-1.5 w-full rounded-xl border bg-white/80 px-3 py-2 font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
             aria-label="Column title"
             title="Click to rename this column"

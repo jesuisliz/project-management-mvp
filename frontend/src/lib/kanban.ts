@@ -1,3 +1,6 @@
+export const MAX_TITLE_LENGTH = 200;
+export const MAX_DETAILS_LENGTH = 4_000;
+
 export type Card = {
   id: string;
   title: string;

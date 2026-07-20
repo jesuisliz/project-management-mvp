@@ -1,13 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+} from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { ApiError, sessionApi } from "@/lib/api";
 
 type SessionState =
   | { status: "loading" }
   | { status: "anonymous" }
-  | { status: "authenticated"; username: string };
+  | { status: "authenticated"; username: string }
+  | { status: "error" };
+
+type SessionCheckResult =
+  | { outcome: "authenticated"; username: string }
+  | { outcome: "anonymous" }
+  | { outcome: "error" };
+
+const fetchSessionResult = async (): Promise<SessionCheckResult> => {
+  try {
+    const current = await sessionApi.current();
+    return current.authenticated && current.username
+      ? { outcome: "authenticated", username: current.username }
+      : { outcome: "anonymous" };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return { outcome: "anonymous" };
+    }
+    return { outcome: "error" };
+  }
+};
 
 type LoginFormProps = {
   onSignedIn: (username: string) => void;
@@ -154,32 +179,30 @@ export const AuthApp = () => {
     []
   );
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadSession = async () => {
-      try {
-        const current = await sessionApi.current();
-        if (!isActive) return;
-        setSession(
-          current.authenticated && current.username
-            ? { status: "authenticated", username: current.username }
-            : { status: "anonymous" }
-        );
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          if (isActive) setSession({ status: "anonymous" });
-          return;
-        }
-        if (isActive) setSession({ status: "anonymous" });
-      }
-    };
-
-    void loadSession();
-    return () => {
-      isActive = false;
-    };
+  const applySessionResult = useCallback((result: SessionCheckResult) => {
+    if (result.outcome === "authenticated") {
+      setSession({ status: "authenticated", username: result.username });
+    } else if (result.outcome === "anonymous") {
+      setSession({ status: "anonymous" });
+    } else {
+      setSession({ status: "error" });
+    }
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    fetchSessionResult().then((result) => {
+      if (!ignore) applySessionResult(result);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [applySessionResult]);
+
+  const retrySessionCheck = () => {
+    setSession({ status: "loading" });
+    void fetchSessionResult().then(applySessionResult);
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -207,6 +230,28 @@ export const AuthApp = () => {
             Loading your workspace...
           </p>
         </div>
+      </main>
+    );
+  }
+
+  if (session.status === "error") {
+    return (
+      <main className="auth-page flex min-h-screen items-center justify-center px-6">
+        <section className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-[var(--shadow-strong)]">
+          <h1 className="font-display text-2xl font-semibold text-[var(--navy-dark)]">
+            Unable to reach the server
+          </h1>
+          <p role="alert" className="mt-3 text-sm text-[var(--gray-text)]">
+            Check that the server is running, then try again.
+          </p>
+          <button
+            type="button"
+            onClick={retrySessionCheck}
+            className="mt-6 rounded-full bg-[var(--secondary-purple)] px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            Try again
+          </button>
+        </section>
       </main>
     );
   }

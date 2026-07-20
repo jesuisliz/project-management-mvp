@@ -135,4 +135,20 @@ describe("AuthApp", () => {
       screen.queryByRole("heading", { name: "Kanban Studio" })
     ).not.toBeInTheDocument();
   });
+
+  it("shows a retry option when the session check fails outright", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network down"));
+    render(<AuthApp />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Unable to reach the server" })
+    ).toBeVisible();
+
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ authenticated: false, username: null })
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+  });
 });

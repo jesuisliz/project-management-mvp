@@ -53,6 +53,22 @@ const subscribeToDesktopLayout = (onChange: () => void) => {
 const getDesktopLayout = () =>
   typeof window !== "undefined" && Boolean(window.matchMedia?.(desktopChatQuery).matches);
 
+type BoardLoadResult =
+  | { outcome: "success"; board: BoardData }
+  | { outcome: "unauthorized" }
+  | { outcome: "error" };
+
+const fetchBoardResult = async (): Promise<BoardLoadResult> => {
+  try {
+    return { outcome: "success", board: await boardApi.get() };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return { outcome: "unauthorized" };
+    }
+    return { outcome: "error" };
+  }
+};
+
 type KanbanBoardProps = {
   username?: string;
   onLogout?: () => void;
@@ -82,7 +98,7 @@ export const KanbanBoard = ({
   const isDesktopLayout = useSyncExternalStore(
     subscribeToDesktopLayout,
     getDesktopLayout,
-    () => true
+    () => false
   );
   const isChatOpen = chatVisibility ?? isDesktopLayout;
 
@@ -92,44 +108,35 @@ export const KanbanBoard = ({
     })
   );
 
-  const loadBoard = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      setBoard(await boardApi.get());
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+  const applyBoardResult = useCallback(
+    (result: BoardLoadResult) => {
+      if (result.outcome === "success") {
+        setBoard(result.board);
+      } else if (result.outcome === "unauthorized") {
         onUnauthorized();
-        return;
+      } else {
+        setLoadError("Unable to load your board. Check the server and try again.");
       }
-      setLoadError("Unable to load your board. Check the server and try again.");
-    } finally {
       setIsLoading(false);
-    }
-  }, [onUnauthorized]);
+    },
+    [onUnauthorized]
+  );
 
   useEffect(() => {
-    let isActive = true;
-    boardApi
-      .get()
-      .then((loadedBoard) => {
-        if (isActive) setBoard(loadedBoard);
-      })
-      .catch((error: unknown) => {
-        if (!isActive) return;
-        if (error instanceof ApiError && error.status === 401) {
-          onUnauthorized();
-          return;
-        }
-        setLoadError("Unable to load your board. Check the server and try again.");
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false);
-      });
+    let ignore = false;
+    fetchBoardResult().then((result) => {
+      if (!ignore) applyBoardResult(result);
+    });
     return () => {
-      isActive = false;
+      ignore = true;
     };
-  }, [onUnauthorized]);
+  }, [applyBoardResult]);
+
+  const retryLoadBoard = () => {
+    setIsLoading(true);
+    setLoadError(null);
+    void fetchBoardResult().then(applyBoardResult);
+  };
 
   const cardsById = useMemo(() => board?.cards ?? {}, [board]);
 
@@ -286,7 +293,7 @@ export const KanbanBoard = ({
           </p>
           <button
             type="button"
-            onClick={() => void loadBoard()}
+            onClick={retryLoadBoard}
             className="mt-6 rounded-full bg-[var(--secondary-purple)] px-5 py-2.5 text-sm font-semibold text-white"
           >
             Try again

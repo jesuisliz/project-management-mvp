@@ -14,10 +14,24 @@ from pydantic import (
 MAX_HISTORY_MESSAGES = 20
 MAX_MESSAGE_LENGTH = 2_000
 MAX_OPERATIONS = 20
+MAX_CARD_TITLE_LENGTH = 200
+MAX_CARD_DETAILS_LENGTH = 4_000
 
 NonBlankText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1),
+]
+CardTitleText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_CARD_TITLE_LENGTH,
+    ),
+]
+CardDetailsText = Annotated[
+    str,
+    StringConstraints(max_length=MAX_CARD_DETAILS_LENGTH),
 ]
 
 
@@ -29,8 +43,8 @@ class CardOperation(ChatModel):
     type: Literal["create_card", "edit_card", "move_card"]
     card_id: NonBlankText | None
     column_id: NonBlankText | None
-    title: NonBlankText | None
-    details: str | None
+    title: CardTitleText | None
+    details: CardDetailsText | None
     position: Annotated[int, Field(strict=True, ge=0)] | None
 
     @model_validator(mode="after")

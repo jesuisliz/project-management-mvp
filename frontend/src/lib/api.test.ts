@@ -86,6 +86,19 @@ describe("boardApi", () => {
     );
   });
 
+  it("surfaces a safe error when a failed response has no JSON body", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: vi.fn().mockRejectedValue(new SyntaxError("Unexpected end of input")),
+    } as unknown as Response);
+
+    await expect(boardApi.get()).rejects.toEqual(
+      new ApiError(500, "Internal Server Error")
+    );
+  });
+
   it("sends the current message and conversation history to chat", async () => {
     const response = {
       reply: "The board is on track.",

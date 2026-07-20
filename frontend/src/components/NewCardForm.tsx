@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { MAX_DETAILS_LENGTH, MAX_TITLE_LENGTH } from "@/lib/kanban";
 
 const initialFormState = { title: "", details: "" };
 
@@ -32,6 +33,7 @@ export const NewCardForm = ({ onAdd, isDisabled }: NewCardFormProps) => {
               setFormState((prev) => ({ ...prev, title: event.target.value }))
             }
             placeholder="Card title"
+            maxLength={MAX_TITLE_LENGTH}
             className="w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--column-accent)]"
             required
             disabled={isDisabled}
@@ -43,6 +45,7 @@ export const NewCardForm = ({ onAdd, isDisabled }: NewCardFormProps) => {
             }
             placeholder="Details"
             rows={3}
+            maxLength={MAX_DETAILS_LENGTH}
             className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--column-accent)]"
             disabled={isDisabled}
           />

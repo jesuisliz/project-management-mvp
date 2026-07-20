@@ -29,10 +29,21 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
       ? { "Content-Type": "application/json", ...init.headers }
       : init?.headers,
   });
-  const payload = (await response.json()) as T & { detail?: string };
+  let payload: (T & { detail?: string }) | undefined;
+  try {
+    payload = (await response.json()) as T & { detail?: string };
+  } catch {
+    payload = undefined;
+  }
 
   if (!response.ok) {
-    throw new ApiError(response.status, payload.detail ?? "Request failed");
+    throw new ApiError(
+      response.status,
+      payload?.detail ?? response.statusText ?? "Request failed"
+    );
+  }
+  if (payload === undefined) {
+    throw new ApiError(response.status, "Unexpected empty response");
   }
   return payload;
 };
