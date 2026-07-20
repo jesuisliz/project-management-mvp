@@ -5,6 +5,7 @@ description = "Local project management MVP"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi",
+    "openai>=2.46.0",
     "uvicorn[standard]",
 ]
 
@@ -16,6 +17,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+markers = [
+    "live: makes an explicitly enabled request to the OpenAI API",
+]
 
 [tool.uv]
 package = false

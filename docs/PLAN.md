@@ -247,13 +247,13 @@ Add a minimal backend OpenAI client and prove an authenticated live call works u
 
 ### Checklist
 
-- [ ] Add the official OpenAI Python SDK through `uv`.
-- [ ] Load `OPENAI_API_KEY` from the environment and choose the model through an `OPENAI_MODEL` setting with a documented default.
-- [ ] Fail an AI request with a concise configuration error when the key is absent, without preventing non-AI features from starting or exposing the key.
-- [ ] Add a small AI service boundary that can be replaced with a fake in normal automated tests.
-- [ ] Add an explicit, opt-in live connectivity test that asks `2+2` and checks for an answer of `4`.
-- [ ] Ensure the container receives the key at runtime rather than baking `.env` into its image.
-- [ ] Document how to run the live test and any cost/network expectation.
+- [x] Add the official OpenAI Python SDK through `uv`.
+- [x] Load `OPENAI_API_KEY` from the environment and choose the model through an `OPENAI_MODEL` setting with a documented default.
+- [x] Fail an AI request with a concise configuration error when the key is absent, without preventing non-AI features from starting or exposing the key.
+- [x] Add a small AI service boundary that can be replaced with a fake in normal automated tests.
+- [x] Add an explicit, opt-in live connectivity test that asks `2+2` and checks for an answer of `4`.
+- [x] Ensure the container receives the key at runtime rather than baking `.env` into its image.
+- [x] Document how to run the live test and any cost/network expectation.
 
 ### Tests
 

@@ -36,6 +36,20 @@ persists when the application container is stopped or recreated.
 Column renames and card creation, inline editing, deletion, reordering, and
 cross-column movement are saved through the authenticated board API.
 
+## OpenAI configuration
+
+Create a project-root `.env` file before running the opt-in OpenAI connectivity
+test:
+
+```text
+OPENAI_API_KEY=your-key
+OPENAI_MODEL=gpt-5.6-terra
+```
+
+`OPENAI_MODEL` is optional and defaults to `gpt-5.6-terra`. The key is passed to
+the container at runtime and is not included in the image. Part 8 adds backend
+connectivity only; the AI chat UI is implemented in later parts.
+
 ## Tests
 
 Frontend:
@@ -54,4 +68,11 @@ Production container and backend:
 ```sh
 docker build --target test --tag project-management-mvp-test .
 docker run --rm project-management-mvp-test
+```
+
+Normal tests use a fake OpenAI client and make no network requests. Run the one
+billable live connectivity test explicitly:
+
+```sh
+docker run --rm --env-file .env --env RUN_OPENAI_LIVE_TEST=1 project-management-mvp-test uv run --no-sync pytest backend/tests/test_ai_live.py
 ```
