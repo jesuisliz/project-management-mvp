@@ -51,7 +51,11 @@ Authentication uses the FastAPI session endpoints and an HTTP-only cookie; the
 frontend must not persist credentials or session tokens. All production board
 reads and writes use the FastAPI board API. Local state is replaced only with
 confirmed canonical responses, and unauthorized responses return to sign-in.
-AI chat is not yet implemented.
+The responsive AI Assistant is open by default on desktop and available from a
+button on smaller screens. Conversation history stays in React memory for the
+current page session. AI responses replace board state only when the backend
+returns a changed canonical board, and AI/manual mutations share one in-flight
+lock.
 
 ## Conventions
 

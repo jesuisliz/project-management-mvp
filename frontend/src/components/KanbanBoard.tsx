@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
 } from "react";
 import {
@@ -18,9 +19,15 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { ApiError, boardApi } from "@/lib/api";
+import {
+  ApiError,
+  boardApi,
+  chatApi,
+} from "@/lib/api";
+import { getBoundedChatHistory, type ChatMessage } from "@/lib/chat";
 import {
   getCardDestination,
   type BoardData,
@@ -33,6 +40,18 @@ const columnAccents = [
   "#f26b5b",
   "#16a085",
 ];
+
+const desktopChatQuery = "(min-width: 1600px)";
+
+const subscribeToDesktopLayout = (onChange: () => void) => {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const query = window.matchMedia(desktopChatQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+};
+
+const getDesktopLayout = () =>
+  typeof window !== "undefined" && Boolean(window.matchMedia?.(desktopChatQuery).matches);
 
 type KanbanBoardProps = {
   username?: string;
@@ -55,7 +74,17 @@ export const KanbanBoard = ({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [chatVisibility, setChatVisibility] = useState<boolean | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [isChatSending, setIsChatSending] = useState(false);
   const mutationInFlight = useRef(false);
+  const isDesktopLayout = useSyncExternalStore(
+    subscribeToDesktopLayout,
+    getDesktopLayout,
+    () => true
+  );
+  const isChatOpen = chatVisibility ?? isDesktopLayout;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -182,6 +211,48 @@ export const KanbanBoard = ({
       "Unable to remove the card. It remains on the saved board."
     );
 
+  const handleSendChat = async (message: string): Promise<boolean> => {
+    if (mutationInFlight.current) return false;
+
+    mutationInFlight.current = true;
+    setIsMutating(true);
+    setIsChatSending(true);
+    setChatError(null);
+    try {
+      const response = await chatApi.send(
+        message,
+        getBoundedChatHistory(chatMessages)
+      );
+      if (response.boardChanged && !response.board) {
+        throw new Error("Chat response omitted the updated board");
+      }
+      if (response.boardChanged && response.board) {
+        setBoard(response.board);
+      }
+      setChatMessages((current) => [
+        ...current,
+        { role: "user", content: message },
+        { role: "assistant", content: response.reply },
+      ]);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onUnauthorized();
+        return false;
+      }
+      setChatError(
+        error instanceof ApiError && error.status === 503
+          ? "The AI assistant is not configured. Check the OpenAI settings."
+          : "The AI assistant could not complete that request. Please try again."
+      );
+      return false;
+    } finally {
+      mutationInFlight.current = false;
+      setIsMutating(false);
+      setIsChatSending(false);
+    }
+  };
+
   const focusColumnTitle = (columnId: string) => {
     const input = document.getElementById(`column-title-${columnId}`);
     if (input instanceof HTMLInputElement) {
@@ -232,7 +303,7 @@ export const KanbanBoard = ({
       <div className="pointer-events-none absolute left-0 top-0 h-[460px] w-[460px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.28)_0%,_rgba(32,157,215,0.05)_58%,_transparent_72%)]" />
       <div className="pointer-events-none absolute bottom-0 right-0 h-[560px] w-[560px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(139,92,246,0.2)_0%,_rgba(117,57,145,0.04)_58%,_transparent_75%)]" />
 
-      <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-10 px-6 pb-16 pt-12">
+      <main className="relative mx-auto flex min-h-screen max-w-[1900px] flex-col gap-10 px-6 pb-16 pt-12">
         <header className="board-hero flex flex-col gap-7 overflow-hidden rounded-[32px] p-8 text-white shadow-[var(--shadow-strong)]">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
@@ -271,6 +342,15 @@ export const KanbanBoard = ({
                   One board. Five columns. Zero clutter.
                 </p>
               </div>
+              {!isChatOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setChatVisibility(true)}
+                  className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-[var(--secondary-purple)] shadow-[0_12px_24px_rgba(3,33,71,0.18)] transition hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/30"
+                >
+                  Open AI Assistant
+                </button>
+              ) : null}
               {authError ? (
                 <p role="alert" className="text-sm font-medium text-[#ffd6d1]">
                   {authError}
@@ -312,36 +392,51 @@ export const KanbanBoard = ({
           </p>
         ) : null}
 
-        <DndContext
-          id="kanban-board-dnd"
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <section className="grid gap-6 lg:grid-cols-5">
-            {board.columns.map((column, index) => (
-              <KanbanColumn
-                key={`${column.id}:${column.title}`}
-                column={column}
-                accent={columnAccents[index]}
-                cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                isMutating={isMutating}
-                onRename={handleRenameColumn}
-                onAddCard={handleAddCard}
-                onEditCard={handleEditCard}
-                onDeleteCard={handleDeleteCard}
-              />
-            ))}
-          </section>
-          <DragOverlay>
-            {activeCard ? (
-              <div className="w-[260px]">
-                <KanbanCardPreview card={activeCard} />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <div className="flex min-w-0 items-start gap-6">
+          <div className="min-w-0 flex-1 overflow-x-auto pb-3">
+            <DndContext
+              id="kanban-board-dnd"
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <section className="grid gap-6 lg:min-w-[1100px] lg:grid-cols-5">
+                {board.columns.map((column, index) => (
+                  <KanbanColumn
+                    key={`${column.id}:${column.title}`}
+                    column={column}
+                    accent={columnAccents[index]}
+                    cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                    isMutating={isMutating}
+                    onRename={handleRenameColumn}
+                    onAddCard={handleAddCard}
+                    onEditCard={handleEditCard}
+                    onDeleteCard={handleDeleteCard}
+                  />
+                ))}
+              </section>
+              <DragOverlay>
+                {activeCard ? (
+                  <div className="w-[260px]">
+                    <KanbanCardPreview card={activeCard} />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          </div>
+
+          {isChatOpen ? (
+            <ChatSidebar
+              messages={chatMessages}
+              isSending={isChatSending}
+              isBoardBusy={isMutating && !isChatSending}
+              error={chatError}
+              onClose={() => setChatVisibility(false)}
+              onSend={handleSendChat}
+            />
+          ) : null}
+        </div>
       </main>
     </div>
   );

@@ -312,18 +312,18 @@ Add a polished, accessible AI chat sidebar that maintains the current conversati
 
 ### Checklist
 
-- [ ] Design the sidebar within the existing color system and board layout, with a usable responsive treatment for narrow screens.
-- [ ] Add chat open/close behavior if required by the responsive layout.
-- [ ] Render user and assistant messages with readable roles and an empty-state prompt.
-- [ ] Add an accessible composer with submit, disabled/loading state, keyboard behavior, and concise errors.
-- [ ] Send the current user message and bounded session-local history to the Part 9 endpoint.
-- [ ] Prevent duplicate sends while a request is in flight.
-- [ ] Append successful responses to the conversation without persisting chat to SQLite.
-- [ ] When the response changes the board, replace visible state with the returned canonical board or immediately refetch it.
-- [ ] Preserve the conversation when the board refreshes during the current page session.
-- [ ] Verify the sidebar does not break board drag/drop, editing, or scrolling.
-- [ ] Complete final documentation for setup, OpenAI configuration, start/stop, tests, data persistence, and MVP limitations.
-- [ ] Run the complete project verification suite in the production container configuration.
+- [x] Design the sidebar within the existing color system and board layout, with a usable responsive treatment for narrow screens.
+- [x] Add chat open/close behavior if required by the responsive layout.
+- [x] Render user and assistant messages with readable roles and an empty-state prompt.
+- [x] Add an accessible composer with submit, disabled/loading state, keyboard behavior, and concise errors.
+- [x] Send the current user message and bounded session-local history to the Part 9 endpoint.
+- [x] Prevent duplicate sends while a request is in flight.
+- [x] Append successful responses to the conversation without persisting chat to SQLite.
+- [x] When the response changes the board, replace visible state with the returned canonical board or immediately refetch it.
+- [x] Preserve the conversation when the board refreshes during the current page session.
+- [x] Verify the sidebar does not break board drag/drop, editing, or scrolling.
+- [x] Complete final documentation for setup, OpenAI configuration, start/stop, tests, data persistence, and MVP limitations.
+- [x] Run the complete project verification suite in the production container configuration.
 
 ### Tests
 

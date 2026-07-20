@@ -37,3 +37,9 @@ invalid operation rejects and rolls back the full batch.
 OpenAI Responses are parsed against the backend's Pydantic schema with
 `store=false`. Provider, parsing, and invalid-operation failures return concise
 errors without exposing provider details.
+
+The frontend sends at most the latest 20 successful user/assistant messages.
+Reply-only responses append to the conversation without refreshing the board.
+Mutation responses immediately replace visible board state with the returned
+canonical board. Conversation state is not persisted and clears on logout or
+page reload.

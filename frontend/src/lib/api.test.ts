@@ -1,4 +1,4 @@
-import { ApiError, boardApi } from "@/lib/api";
+import { ApiError, boardApi, chatApi } from "@/lib/api";
 import { cloneBoard } from "@/test/boardFixture";
 
 const mockResponse = (body: unknown, status = 200): Response =>
@@ -83,6 +83,30 @@ describe("boardApi", () => {
 
     await expect(boardApi.get()).rejects.toEqual(
       new ApiError(401, "Authentication required")
+    );
+  });
+
+  it("sends the current message and conversation history to chat", async () => {
+    const response = {
+      reply: "The board is on track.",
+      boardChanged: false,
+    };
+    fetchMock.mockResolvedValueOnce(mockResponse(response));
+    const history = [
+      { role: "user" as const, content: "What is in progress?" },
+      { role: "assistant" as const, content: "Two cards." },
+    ];
+
+    await expect(chatApi.send("What is next?", history)).resolves.toEqual(
+      response
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        body: JSON.stringify({ message: "What is next?", history }),
+      })
     );
   });
 });

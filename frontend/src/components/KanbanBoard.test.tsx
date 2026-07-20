@@ -189,4 +189,128 @@ describe("KanbanBoard", () => {
 
     expect(onUnauthorized).toHaveBeenCalledOnce();
   });
+
+  it("keeps reply-only chat in session memory without refreshing the board", async () => {
+    await renderBoard(fetchMock);
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({
+        reply: "The roadmap card is in Backlog.",
+        boardChanged: false,
+      })
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open AI Assistant" })
+    );
+    await userEvent.type(
+      screen.getByLabelText("Message AI assistant"),
+      "Where is the roadmap card?"
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("The roadmap card is in Backlog.")).toBeVisible();
+    expect(screen.getByText("Where is the roadmap card?")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: "Where is the roadmap card?",
+          history: [],
+        }),
+      })
+    );
+  });
+
+  it("sends successful prior turns as history on the next message", async () => {
+    await renderBoard(fetchMock);
+    fetchMock
+      .mockResolvedValueOnce(
+        mockResponse({ reply: "Two cards are in Backlog.", boardChanged: false })
+      )
+      .mockResolvedValueOnce(
+        mockResponse({ reply: "Align roadmap themes.", boardChanged: false })
+      );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open AI Assistant" })
+    );
+    const composer = screen.getByLabelText("Message AI assistant");
+
+    await userEvent.type(composer, "How many cards are in Backlog?");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Two cards are in Backlog.");
+    await userEvent.type(composer, "Which should I do first?");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Align roadmap themes.")).toBeVisible();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: "Which should I do first?",
+          history: [
+            { role: "user", content: "How many cards are in Backlog?" },
+            { role: "assistant", content: "Two cards are in Backlog." },
+          ],
+        }),
+      })
+    );
+  });
+
+  it("replaces the visible board after an AI mutation", async () => {
+    await renderBoard(fetchMock);
+    const updated = cloneBoard();
+    updated.cards["card-ai"] = {
+      id: "card-ai",
+      title: "Prepare launch notes",
+      details: "Created by the assistant.",
+    };
+    updated.columns[0].cardIds.push("card-ai");
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({
+        reply: "I added the launch-notes card.",
+        boardChanged: true,
+        board: updated,
+      })
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open AI Assistant" })
+    );
+
+    await userEvent.type(
+      screen.getByLabelText("Message AI assistant"),
+      "Add a launch-notes card"
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Prepare launch notes")).toBeVisible();
+    expect(screen.getByText("I added the launch-notes card.")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a concise chat error and returns to sign in on unauthorized chat", async () => {
+    const onUnauthorized = await renderBoard(fetchMock, vi.fn());
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ detail: "OpenAI provider detail" }, 502)
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open AI Assistant" })
+    );
+    const composer = screen.getByLabelText("Message AI assistant");
+
+    await userEvent.type(composer, "Try this request");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not complete that request"
+    );
+    expect(screen.queryByText("OpenAI provider detail")).not.toBeInTheDocument();
+    expect(composer).toHaveValue("Try this request");
+
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ detail: "Authentication required" }, 401)
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onUnauthorized).toHaveBeenCalledOnce());
+  });
 });

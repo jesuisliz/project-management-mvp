@@ -1,8 +1,15 @@
 import type { BoardData } from "@/lib/kanban";
+import type { ChatMessage } from "@/lib/chat";
 
 export type SessionPayload = {
   authenticated: boolean;
   username: string | null;
+};
+
+export type ChatResponse = {
+  reply: string;
+  boardChanged: boolean;
+  board?: BoardData;
 };
 
 export class ApiError extends Error {
@@ -70,4 +77,12 @@ export const boardApi = {
         body: JSON.stringify({ columnId, position }),
       }
     ),
+};
+
+export const chatApi = {
+  send: (message: string, history: ChatMessage[]) =>
+    request<ChatResponse>("/api/ai/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
 };

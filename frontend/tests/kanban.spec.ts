@@ -56,6 +56,75 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({ json: board });
       return;
     }
+    if (path === "/api/ai/chat" && method === "POST") {
+      const payload = request.postDataJSON() as {
+        message: string;
+        history: Array<{ role: "user" | "assistant"; content: string }>;
+      };
+      const message = payload.message.toLowerCase();
+      let reply = "The board is ready for your next step.";
+      let boardChanged = false;
+
+      if (message.includes("create an ai launch card")) {
+        const id = `card-playwright-${nextCardId++}`;
+        board.cards[id] = {
+          id,
+          title: "AI launch card",
+          details: "Created through chat.",
+        };
+        board.columns[0].cardIds.push(id);
+        reply = "I created the AI launch card in Backlog.";
+        boardChanged = true;
+      } else if (message.includes("edit the ai launch card")) {
+        const card = Object.values(board.cards).find(
+          (candidate) => candidate.title === "AI launch card"
+        );
+        if (card) {
+          board.cards[card.id] = {
+            ...card,
+            title: "Edited AI launch card",
+            details: "Edited through chat.",
+          };
+          boardChanged = true;
+        }
+        reply = "I edited the AI launch card.";
+      } else if (message.includes("move the edited ai launch card")) {
+        const card = Object.values(board.cards).find(
+          (candidate) => candidate.title === "Edited AI launch card"
+        );
+        if (card) {
+          board.columns = board.columns.map((column) => ({
+            ...column,
+            cardIds: column.cardIds.filter((id) => id !== card.id),
+          }));
+          const review = board.columns.find(
+            (column) => column.id === "col-review"
+          );
+          review?.cardIds.unshift(card.id);
+          boardChanged = true;
+        }
+        reply = "I moved the edited AI launch card to Review.";
+      } else if (message.includes("create two follow-up cards")) {
+        for (const title of ["AI follow-up one", "AI follow-up two"]) {
+          const id = `card-playwright-${nextCardId++}`;
+          board.cards[id] = { id, title, details: "Created in one request." };
+          board.columns[0].cardIds.push(id);
+        }
+        reply = "I created both follow-up cards.";
+        boardChanged = true;
+      } else if (message.includes("follow up on that")) {
+        reply = `I received ${payload.history.length} prior messages.`;
+      }
+
+      await route.fulfill({
+        json: {
+          reply,
+          boardChanged,
+          ...(boardChanged ? { board } : {}),
+        },
+      });
+      return;
+    }
 
     const columnMatch = path.match(/^\/api\/board\/columns\/([^/]+)$/);
     if (columnMatch && method === "PATCH") {
@@ -226,6 +295,114 @@ test("logout hides the board and ends the session", async ({ page }) => {
 test("loads the five-column server board", async ({ page }) => {
   await signIn(page);
   await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+});
+
+test("opens chat by default on desktop and supports collapse", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await signIn(page);
+
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeVisible();
+  await page.getByRole("button", { name: "Close AI assistant" }).click();
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeHidden();
+  await page.getByRole("button", { name: "Open AI Assistant" }).click();
+  await expect(page.getByLabel("Message AI assistant")).toBeFocused();
+});
+
+test("keeps chat closed by default on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 900 });
+  await signIn(page);
+
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeHidden();
+  await page.getByRole("button", { name: "Open AI Assistant" }).click();
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeVisible();
+  await page.getByRole("button", { name: "Close AI assistant" }).click();
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeHidden();
+});
+
+test("keeps all five columns even and visible at laptop width", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+
+  await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeHidden();
+  const columns = page.locator('[data-testid^="column-"]');
+  await expect(columns).toHaveCount(5);
+  const boxes = await columns.evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, width: box.width };
+    })
+  );
+  const widths = boxes.map((box) => box.width);
+
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);
+  expect(boxes[0].left).toBeGreaterThanOrEqual(24);
+  expect(boxes[4].right).toBeLessThanOrEqual(1440 - 24);
+});
+
+test("holds a multi-turn chat and applies AI card changes", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("button", { name: "Open AI Assistant" }).click();
+  const composer = page.getByLabel("Message AI assistant");
+
+  await composer.fill("What is on the board?");
+  await composer.press("Enter");
+  await expect(page.getByText("The board is ready for your next step.")).toBeVisible();
+
+  await composer.fill("Follow up on that");
+  await composer.press("Enter");
+  await expect(page.getByText("I received 2 prior messages.")).toBeVisible();
+
+  await composer.fill("Create an AI launch card");
+  await composer.press("Enter");
+  await expect(page.getByText("AI launch card", { exact: true })).toBeVisible();
+
+  await composer.fill("Edit the AI launch card");
+  await composer.press("Enter");
+  await expect(page.getByText("Edited AI launch card", { exact: true })).toBeVisible();
+
+  await composer.fill("Move the edited AI launch card to Review");
+  await composer.press("Enter");
+  await expect(
+    page.getByTestId("column-col-review").getByText("Edited AI launch card")
+  ).toBeVisible();
+
+  await composer.fill("Create two follow-up cards");
+  await composer.press("Enter");
+  await expect(page.getByText("AI follow-up one")).toBeVisible();
+  await expect(page.getByText("AI follow-up two")).toBeVisible();
+
+  await page.evaluate(async () => {
+    const boardResponse = await fetch("/api/board");
+    const board = (await boardResponse.json()) as {
+      cards: Record<string, { title: string }>;
+    };
+    const aiCardIds = Object.entries(board.cards)
+      .filter(([, card]) => card.title.toLowerCase().includes("ai "))
+      .map(([cardId]) => cardId);
+    for (const cardId of aiCardIds) {
+      const response = await fetch(`/api/board/cards/${cardId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Unable to remove AI browser-test card");
+    }
+  });
+});
+
+test("logout clears the session-local conversation", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("button", { name: "Open AI Assistant" }).click();
+  const composer = page.getByLabel("Message AI assistant");
+  await composer.fill("What is on the board?");
+  await composer.press("Enter");
+  await expect(page.getByText("The board is ready for your next step.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Close AI assistant" }).click();
+  await page.getByRole("button", { name: "Log out" }).click();
+  await signIn(page);
+  await page.getByRole("button", { name: "Open AI Assistant" }).click();
+
+  await expect(page.getByText("What should we change?")).toBeVisible();
+  await expect(page.getByText("The board is ready for your next step.")).toBeHidden();
 });
 
 test("renames a column and persists across reload", async ({ page }) => {

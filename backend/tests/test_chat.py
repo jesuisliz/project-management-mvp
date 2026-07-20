@@ -202,6 +202,10 @@ def test_chat_uses_authoritative_board_and_bounded_history(
     assert isinstance(instructions, str)
     assert '"id":"card-1"' in instructions
     assert '"id":"col-backlog"' in instructions
+    assert (
+        "set the reply\nexactly to: Delete can only be done manually."
+        in instructions
+    )
 
 
 def test_chat_rejects_client_board_snapshots(database_path: Path) -> None:
