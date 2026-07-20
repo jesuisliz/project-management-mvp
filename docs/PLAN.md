@@ -276,17 +276,17 @@ Create the chat backend that sends the current board, the user's message, and co
 
 ### Checklist
 
-- [ ] Define a strict Structured Outputs schema containing a user-facing reply and an ordered list of optional card operations.
-- [ ] Limit AI operations to the required capabilities: create one or more cards, edit cards, and move/reorder cards. Do not give the AI a delete operation unless requirements change.
-- [ ] Define the chat request shape with the current message and bounded conversation history.
-- [ ] Fetch the canonical current board on the backend; do not trust a board snapshot supplied by the browser.
-- [ ] Build a concise system instruction containing the board JSON, supported operations, stable IDs, fixed-column rules, and response expectations.
-- [ ] Call OpenAI with strict structured parsing through the Part 8 service.
-- [ ] Validate every returned operation against the signed-in user's current board before applying any change.
-- [ ] Apply all operations in one database transaction and roll back the full set if any operation is invalid.
-- [ ] Return the assistant reply plus whether the board changed and the updated canonical board when it did.
-- [ ] Keep conversation history session-local in the frontend for the MVP; do not add chat persistence unless separately approved.
-- [ ] Bound message/history sizes and return concise errors for malformed model output or provider failure.
+- [x] Define a strict Structured Outputs schema containing a user-facing reply and an ordered list of optional card operations.
+- [x] Limit AI operations to the required capabilities: create one or more cards, edit cards, and move/reorder cards. Do not give the AI a delete operation unless requirements change.
+- [x] Define the chat request shape with the current message and bounded conversation history.
+- [x] Fetch the canonical current board on the backend; do not trust a board snapshot supplied by the browser.
+- [x] Build a concise system instruction containing the board JSON, supported operations, stable IDs, fixed-column rules, and response expectations.
+- [x] Call OpenAI with strict structured parsing through the Part 8 service.
+- [x] Validate every returned operation against the signed-in user's current board before applying any change.
+- [x] Apply all operations in one database transaction and roll back the full set if any operation is invalid.
+- [x] Return the assistant reply plus whether the board changed and the updated canonical board when it did.
+- [x] Keep conversation history session-local in the frontend for the MVP; do not add chat persistence unless separately approved.
+- [x] Bound message/history sizes and return concise errors for malformed model output or provider failure.
 
 ### Tests
 

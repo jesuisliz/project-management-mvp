@@ -47,8 +47,9 @@ OPENAI_MODEL=gpt-5.6-terra
 ```
 
 `OPENAI_MODEL` is optional and defaults to `gpt-5.6-terra`. The key is passed to
-the container at runtime and is not included in the image. Part 8 adds backend
-connectivity only; the AI chat UI is implemented in later parts.
+the container at runtime and is not included in the image. The authenticated
+chat backend is available at `POST /api/ai/chat`; the chat UI is implemented in
+Part 10. See `docs/CHAT_API.md` for its request and response contract.
 
 ## Tests
 

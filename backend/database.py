@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from contextlib import closing
 from pathlib import Path
 import sqlite3
@@ -141,6 +142,10 @@ class CardNotFoundError(Exception):
 
 
 class InvalidMoveError(Exception):
+    pass
+
+
+class InvalidCardOperationError(Exception):
     pass
 
 
@@ -306,6 +311,39 @@ def rename_column(
         return _read_board(connection, board_id)
 
 
+def _create_card(
+    connection: sqlite3.Connection,
+    board_id: int,
+    column_id: str,
+    title: str,
+    details: str,
+) -> None:
+    column = connection.execute(
+        "SELECT 1 FROM columns WHERE board_id = ? AND id = ?",
+        (board_id, column_id),
+    ).fetchone()
+    if column is None:
+        raise ColumnNotFoundError
+
+    next_position = connection.execute(
+        """
+        SELECT count(*) AS count
+        FROM cards
+        WHERE board_id = ? AND column_id = ?
+        """,
+        (board_id, column_id),
+    ).fetchone()["count"]
+    card_id = f"card-{uuid4().hex}"
+    connection.execute(
+        """
+        INSERT INTO cards (
+            board_id, id, column_id, position, title, details
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (board_id, card_id, column_id, next_position, title, details),
+    )
+
+
 def create_card(
     database_path: str | Path,
     username: str,
@@ -315,31 +353,27 @@ def create_card(
 ) -> dict[str, object]:
     with closing(_connect(database_path)) as connection, connection:
         board_id = _get_board_id(connection, username)
-        column = connection.execute(
-            "SELECT 1 FROM columns WHERE board_id = ? AND id = ?",
-            (board_id, column_id),
-        ).fetchone()
-        if column is None:
-            raise ColumnNotFoundError
-
-        next_position = connection.execute(
-            """
-            SELECT count(*) AS count
-            FROM cards
-            WHERE board_id = ? AND column_id = ?
-            """,
-            (board_id, column_id),
-        ).fetchone()["count"]
-        card_id = f"card-{uuid4().hex}"
-        connection.execute(
-            """
-            INSERT INTO cards (
-                board_id, id, column_id, position, title, details
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (board_id, card_id, column_id, next_position, title, details),
-        )
+        _create_card(connection, board_id, column_id, title, details)
         return _read_board(connection, board_id)
+
+
+def _edit_card(
+    connection: sqlite3.Connection,
+    board_id: int,
+    card_id: str,
+    title: str,
+    details: str,
+) -> None:
+    cursor = connection.execute(
+        """
+        UPDATE cards
+        SET title = ?, details = ?
+        WHERE board_id = ? AND id = ?
+        """,
+        (title, details, board_id, card_id),
+    )
+    if cursor.rowcount == 0:
+        raise CardNotFoundError
 
 
 def edit_card(
@@ -351,16 +385,7 @@ def edit_card(
 ) -> dict[str, object]:
     with closing(_connect(database_path)) as connection, connection:
         board_id = _get_board_id(connection, username)
-        cursor = connection.execute(
-            """
-            UPDATE cards
-            SET title = ?, details = ?
-            WHERE board_id = ? AND id = ?
-            """,
-            (title, details, board_id, card_id),
-        )
-        if cursor.rowcount == 0:
-            raise CardNotFoundError
+        _edit_card(connection, board_id, card_id, title, details)
         return _read_board(connection, board_id)
 
 
@@ -462,6 +487,78 @@ def delete_card(
         return _read_board(connection, board_id)
 
 
+def _move_card(
+    connection: sqlite3.Connection,
+    board_id: int,
+    card_id: str,
+    destination_column_id: str,
+    destination_position: int,
+) -> None:
+    card = connection.execute(
+        """
+        SELECT column_id
+        FROM cards
+        WHERE board_id = ? AND id = ?
+        """,
+        (board_id, card_id),
+    ).fetchone()
+    if card is None:
+        raise CardNotFoundError
+
+    destination = connection.execute(
+        "SELECT 1 FROM columns WHERE board_id = ? AND id = ?",
+        (board_id, destination_column_id),
+    ).fetchone()
+    if destination is None:
+        raise ColumnNotFoundError
+
+    source_column_id = card["column_id"]
+    source_ids = _card_ids(connection, board_id, source_column_id)
+    source_ids.remove(card_id)
+
+    if source_column_id == destination_column_id:
+        if destination_position > len(source_ids):
+            raise InvalidMoveError
+        source_ids.insert(destination_position, card_id)
+        _stage_columns(connection, board_id, (source_column_id,))
+        _assign_order(connection, board_id, source_column_id, source_ids)
+    else:
+        destination_ids = _card_ids(
+            connection,
+            board_id,
+            destination_column_id,
+        )
+        if destination_position > len(destination_ids):
+            raise InvalidMoveError
+        destination_ids.insert(destination_position, card_id)
+
+        temporary_position = _stage_columns(
+            connection,
+            board_id,
+            (source_column_id, destination_column_id),
+        )
+        connection.execute(
+            """
+            UPDATE cards
+            SET column_id = ?, position = ?
+            WHERE board_id = ? AND id = ?
+            """,
+            (
+                destination_column_id,
+                temporary_position,
+                board_id,
+                card_id,
+            ),
+        )
+        _assign_order(connection, board_id, source_column_id, source_ids)
+        _assign_order(
+            connection,
+            board_id,
+            destination_column_id,
+            destination_ids,
+        )
+
+
 def move_card(
     database_path: str | Path,
     username: str,
@@ -471,68 +568,96 @@ def move_card(
 ) -> dict[str, object]:
     with closing(_connect(database_path)) as connection, connection:
         board_id = _get_board_id(connection, username)
-        card = connection.execute(
-            """
-            SELECT column_id
-            FROM cards
-            WHERE board_id = ? AND id = ?
-            """,
-            (board_id, card_id),
-        ).fetchone()
-        if card is None:
-            raise CardNotFoundError
+        _move_card(
+            connection,
+            board_id,
+            card_id,
+            destination_column_id,
+            destination_position,
+        )
+        return _read_board(connection, board_id)
 
-        destination = connection.execute(
-            "SELECT 1 FROM columns WHERE board_id = ? AND id = ?",
-            (board_id, destination_column_id),
-        ).fetchone()
-        if destination is None:
-            raise ColumnNotFoundError
 
-        source_column_id = card["column_id"]
-        source_ids = _card_ids(connection, board_id, source_column_id)
-        source_ids.remove(card_id)
+def _validate_card_operations(
+    board: dict[str, object],
+    operations: Sequence[Mapping[str, object]],
+) -> None:
+    column_cards = {
+        column["id"]: list(column["cardIds"])
+        for column in board["columns"]
+    }
+    card_columns = {
+        card_id: column_id
+        for column_id, card_ids in column_cards.items()
+        for card_id in card_ids
+    }
 
-        if source_column_id == destination_column_id:
-            if destination_position > len(source_ids):
-                raise InvalidMoveError
-            source_ids.insert(destination_position, card_id)
-            _stage_columns(connection, board_id, (source_column_id,))
-            _assign_order(connection, board_id, source_column_id, source_ids)
-        else:
-            destination_ids = _card_ids(
-                connection,
-                board_id,
-                destination_column_id,
-            )
+    for index, operation in enumerate(operations):
+        operation_type = operation.get("type")
+        if operation_type == "create_card":
+            column_id = operation["column_id"]
+            if column_id not in column_cards:
+                raise ColumnNotFoundError
+            placeholder_id = f"new-card-{index}"
+            column_cards[column_id].append(placeholder_id)
+            card_columns[placeholder_id] = column_id
+        elif operation_type == "edit_card":
+            if operation["card_id"] not in card_columns:
+                raise CardNotFoundError
+        elif operation_type == "move_card":
+            card_id = operation["card_id"]
+            destination_column_id = operation["column_id"]
+            destination_position = operation["position"]
+            if card_id not in card_columns:
+                raise CardNotFoundError
+            if destination_column_id not in column_cards:
+                raise ColumnNotFoundError
+
+            source_column_id = card_columns[card_id]
+            column_cards[source_column_id].remove(card_id)
+            destination_ids = column_cards[destination_column_id]
             if destination_position > len(destination_ids):
                 raise InvalidMoveError
             destination_ids.insert(destination_position, card_id)
+            card_columns[card_id] = destination_column_id
+        else:
+            raise InvalidCardOperationError
 
-            temporary_position = _stage_columns(
-                connection,
-                board_id,
-                (source_column_id, destination_column_id),
-            )
-            connection.execute(
-                """
-                UPDATE cards
-                SET column_id = ?, position = ?
-                WHERE board_id = ? AND id = ?
-                """,
-                (
-                    destination_column_id,
-                    temporary_position,
+
+def apply_card_operations(
+    database_path: str | Path,
+    username: str,
+    operations: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    with closing(_connect(database_path)) as connection, connection:
+        board_id = _get_board_id(connection, username)
+        _validate_card_operations(_read_board(connection, board_id), operations)
+
+        for operation in operations:
+            operation_type = operation["type"]
+            if operation_type == "create_card":
+                _create_card(
+                    connection,
                     board_id,
-                    card_id,
-                ),
-            )
-            _assign_order(connection, board_id, source_column_id, source_ids)
-            _assign_order(
-                connection,
-                board_id,
-                destination_column_id,
-                destination_ids,
-            )
+                    operation["column_id"],
+                    operation["title"],
+                    operation["details"],
+                )
+            elif operation_type == "edit_card":
+                _edit_card(
+                    connection,
+                    board_id,
+                    operation["card_id"],
+                    operation["title"],
+                    operation["details"],
+                )
+            else:
+                _move_card(
+                    connection,
+                    board_id,
+                    operation["card_id"],
+                    operation["column_id"],
+                    operation["position"],
+                )
 
         return _read_board(connection, board_id)

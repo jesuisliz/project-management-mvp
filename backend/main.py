@@ -3,19 +3,30 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 import secrets
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from backend.ai import AIConfigurationError, AIService, AIServiceError
+from backend.chat import (
+    MAX_HISTORY_MESSAGES,
+    MAX_MESSAGE_LENGTH,
+    StructuredChatResponse,
+    build_chat_instructions,
+    build_chat_messages,
+    safety_identifier,
+)
 from backend.database import (
     MVP_USERNAME,
     BoardNotFoundError,
     CardNotFoundError,
     ColumnNotFoundError,
+    InvalidCardOperationError,
     InvalidMoveError,
+    apply_card_operations,
     create_card,
     delete_card,
     edit_card,
@@ -39,6 +50,14 @@ NonBlankText = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1),
 ]
 NonNegativePosition = Annotated[int, Field(strict=True, ge=0)]
+ChatText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_MESSAGE_LENGTH,
+    ),
+]
 
 
 class ApiModel(BaseModel):
@@ -92,6 +111,25 @@ class MoveCardRequest(ApiModel):
     position: NonNegativePosition
 
 
+class ChatHistoryMessage(ApiModel):
+    role: Literal["user", "assistant"]
+    content: ChatText
+
+
+class ChatRequest(ApiModel):
+    message: ChatText
+    history: list[ChatHistoryMessage] = Field(
+        default_factory=list,
+        max_length=MAX_HISTORY_MESSAGES,
+    )
+
+
+class ChatResponse(ApiModel):
+    reply: str
+    board_changed: bool = Field(alias="boardChanged")
+    board: BoardResponse | None = None
+
+
 def _database_path() -> Path:
     return Path(os.environ.get("DATABASE_PATH", DEFAULT_DATABASE_PATH))
 
@@ -104,7 +142,10 @@ def _authenticated_username(request: Request) -> str:
     return username
 
 
-def create_app(database_path: str | Path | None = None) -> FastAPI:
+def create_app(
+    database_path: str | Path | None = None,
+    ai_service: AIService | None = None,
+) -> FastAPI:
     configured_database_path = Path(database_path or _database_path())
 
     @asynccontextmanager
@@ -262,6 +303,68 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             payload.position,
         )
 
+    @api.post(
+        "/ai/chat",
+        response_model=ChatResponse,
+        response_model_exclude_none=True,
+    )
+    def chat(payload: ChatRequest, request: Request) -> ChatResponse:
+        username = _authenticated_username(request)
+        board = get_board(configured_database_path, username)
+
+        try:
+            service = ai_service or AIService.from_environment()
+            result = service.generate_structured(
+                instructions=build_chat_instructions(board),
+                messages=build_chat_messages(
+                    [message.model_dump() for message in payload.history],
+                    payload.message,
+                ),
+                response_type=StructuredChatResponse,
+                safety_identifier=safety_identifier(username),
+            )
+        except AIConfigurationError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="AI is not configured",
+            ) from error
+        except AIServiceError as error:
+            raise HTTPException(
+                status_code=502,
+                detail="AI request failed",
+            ) from error
+
+        operations = [
+            operation.model_dump(exclude_none=True)
+            for operation in result.operations
+        ]
+        if not operations:
+            return ChatResponse(reply=result.reply, board_changed=False)
+
+        try:
+            updated_board = apply_card_operations(
+                configured_database_path,
+                username,
+                operations,
+            )
+        except (
+            BoardNotFoundError,
+            CardNotFoundError,
+            ColumnNotFoundError,
+            InvalidCardOperationError,
+            InvalidMoveError,
+        ) as error:
+            raise HTTPException(
+                status_code=502,
+                detail="AI returned invalid board changes",
+            ) from error
+
+        return ChatResponse(
+            reply=result.reply,
+            board_changed=True,
+            board=BoardResponse.model_validate(updated_board),
+        )
+
     application = FastAPI(
         title="Project Management MVP",
         docs_url=None,
@@ -271,9 +374,15 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     )
 
     @application.middleware("http")
-    async def protect_board_api(request: Request, call_next):
+    async def protect_authenticated_api(request: Request, call_next):
         path = request.url.path
-        if path == "/api/board" or path.startswith("/api/board/"):
+        is_protected = (
+            path == "/api/board"
+            or path.startswith("/api/board/")
+            or path == "/api/ai"
+            or path.startswith("/api/ai/")
+        )
+        if is_protected:
             token = request.cookies.get(SESSION_COOKIE)
             if token not in active_sessions:
                 return JSONResponse(
