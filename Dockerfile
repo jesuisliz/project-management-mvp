@@ -27,6 +27,7 @@ CMD ["uv", "run", "--no-sync", "uvicorn", "backend.main:app", "--host", "0.0.0.0
 
 FROM base AS test
 
+COPY docs ./docs
 RUN uv sync --locked
 
 CMD ["uv", "run", "--no-sync", "pytest"]

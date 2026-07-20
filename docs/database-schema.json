@@ -1,0 +1,255 @@
+{
+  "name": "project_management_mvp",
+  "version": 1,
+  "engine": "SQLite",
+  "tables": [
+    {
+      "name": "users",
+      "purpose": "Board ownership; authentication credentials are not stored here.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "generated": "SQLite rowid"
+        },
+        {
+          "name": "username",
+          "type": "TEXT",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["id"],
+      "unique_constraints": [
+        {
+          "name": "uq_users_username",
+          "columns": ["username"]
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_users_username_not_blank",
+          "expression": "length(trim(username)) > 0"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "source": "unique_constraint",
+          "columns": ["username"]
+        }
+      ]
+    },
+    {
+      "name": "boards",
+      "purpose": "The single board owned by a user.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "generated": "SQLite rowid"
+        },
+        {
+          "name": "user_id",
+          "type": "INTEGER",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["id"],
+      "unique_constraints": [
+        {
+          "name": "uq_boards_user_id",
+          "columns": ["user_id"]
+        }
+      ],
+      "check_constraints": [],
+      "foreign_keys": [
+        {
+          "columns": ["user_id"],
+          "references": {
+            "table": "users",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "source": "unique_constraint",
+          "columns": ["user_id"]
+        }
+      ]
+    },
+    {
+      "name": "columns",
+      "purpose": "Fixed ordered columns with editable titles.",
+      "columns": [
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "id",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["board_id", "id"],
+      "unique_constraints": [
+        {
+          "name": "uq_columns_board_position",
+          "columns": ["board_id", "position"]
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_columns_position",
+          "expression": "position >= 0 AND position < 5"
+        },
+        {
+          "name": "ck_columns_title_not_blank",
+          "expression": "length(trim(title)) > 0"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": ["board_id"],
+          "references": {
+            "table": "boards",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "source": "primary_key",
+          "columns": ["board_id", "id"]
+        },
+        {
+          "source": "unique_constraint",
+          "columns": ["board_id", "position"]
+        }
+      ]
+    },
+    {
+      "name": "cards",
+      "purpose": "Card content, owned column membership, and ordered position.",
+      "columns": [
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "id",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "column_id",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "details",
+          "type": "TEXT",
+          "nullable": false,
+          "default": ""
+        }
+      ],
+      "primary_key": ["board_id", "id"],
+      "unique_constraints": [
+        {
+          "name": "uq_cards_column_position",
+          "columns": ["board_id", "column_id", "position"]
+        }
+      ],
+      "check_constraints": [
+        {
+          "name": "ck_cards_position",
+          "expression": "position >= 0"
+        },
+        {
+          "name": "ck_cards_title_not_blank",
+          "expression": "length(trim(title)) > 0"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": ["board_id"],
+          "references": {
+            "table": "boards",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        },
+        {
+          "columns": ["board_id", "column_id"],
+          "references": {
+            "table": "columns",
+            "columns": ["board_id", "id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "source": "primary_key",
+          "columns": ["board_id", "id"]
+        },
+        {
+          "source": "unique_constraint",
+          "columns": ["board_id", "column_id", "position"]
+        }
+      ]
+    }
+  ],
+  "service_invariants": {
+    "one_board_per_user": true,
+    "fixed_column_ids": [
+      "col-backlog",
+      "col-discovery",
+      "col-progress",
+      "col-review",
+      "col-done"
+    ],
+    "fixed_column_count": 5,
+    "column_mutations": ["rename"],
+    "card_positions": "Zero-based and contiguous within each column after every committed mutation.",
+    "identifiers": "Column and card IDs are stable and scoped to a board.",
+    "timestamps": "Omitted because no MVP behavior consumes them."
+  },
+  "initialization": {
+    "mvp_username": "user",
+    "template": "docs/sample-board.json",
+    "rule": "Create the user if absent and create the complete template only when that user has no board; never reseed an existing board."
+  },
+  "storage": {
+    "configuration": "DATABASE_PATH",
+    "container_path": "/app/data/pm.db",
+    "compose_volume_mount": "/app/data"
+  }
+}

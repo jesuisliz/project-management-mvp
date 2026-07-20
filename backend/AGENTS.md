@@ -4,8 +4,10 @@ This directory contains the FastAPI application and backend tests. FastAPI serve
 
 ## Structure
 
-- `main.py`: root FastAPI application, authentication routes, protected board
-  namespace, `/api` sub-application, and frontend static mount
+- `main.py`: application factory, authentication and typed board routes,
+  protected `/api/board` namespace, and frontend static mount
+- `database.py`: SQLite schema, deterministic provisioning, owned board reads,
+  and transactional board mutations
 - `tests/`: pytest tests using FastAPI's `TestClient`
 
 ## Conventions
@@ -14,6 +16,13 @@ This directory contains the FastAPI application and backend tests. FastAPI serve
 - Keep route behavior small and typed.
 - Keep the Part 4 session implementation local-only: opaque tokens are held in
   server memory and sent only through the HTTP-only session cookie.
+- Resolve every board operation through the username stored in the session.
+  Never accept a user ID or board ID from the browser.
+- Open SQLite connections through the database helper so foreign-key
+  enforcement is enabled. Keep each mutation atomic and preserve contiguous
+  card positions.
+- Use a temporary `DATABASE_PATH` in tests. Production Compose stores the
+  database at `/app/data/pm.db` on its named volume.
 - Test the real `frontend/out` export for static-serving changes.
 - Manage Python dependencies in the root `pyproject.toml` and commit `uv.lock`.
 

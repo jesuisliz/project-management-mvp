@@ -3,21 +3,23 @@ import { useState, type FormEvent } from "react";
 const initialFormState = { title: "", details: "" };
 
 type NewCardFormProps = {
-  onAdd: (title: string, details: string) => void;
+  onAdd: (title: string, details: string) => Promise<boolean>;
+  isDisabled: boolean;
 };
 
-export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
+export const NewCardForm = ({ onAdd, isDisabled }: NewCardFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [formState, setFormState] = useState(initialFormState);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!formState.title.trim()) {
       return;
     }
-    onAdd(formState.title.trim(), formState.details.trim());
-    setFormState(initialFormState);
-    setIsOpen(false);
+    if (await onAdd(formState.title.trim(), formState.details.trim())) {
+      setFormState(initialFormState);
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -32,6 +34,7 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
             placeholder="Card title"
             className="w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--column-accent)]"
             required
+            disabled={isDisabled}
           />
           <textarea
             value={formState.details}
@@ -41,11 +44,13 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
             placeholder="Details"
             rows={3}
             className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--column-accent)]"
+            disabled={isDisabled}
           />
           <div className="flex items-center gap-2">
             <button
               type="submit"
               className="rounded-full bg-[var(--column-accent)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+              disabled={isDisabled}
             >
               Add card
             </button>
@@ -56,6 +61,7 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
                 setFormState(initialFormState);
               }}
               className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+              disabled={isDisabled}
             >
               Cancel
             </button>
@@ -66,6 +72,7 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
           type="button"
           onClick={() => setIsOpen(true)}
           className="add-card-button w-full rounded-full border border-dashed px-3 py-2 text-xs font-semibold uppercase tracking-wide transition"
+          disabled={isDisabled}
         >
           Add a card
         </button>

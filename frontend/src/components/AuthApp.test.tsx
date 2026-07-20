@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthApp } from "@/components/AuthApp";
+import { cloneBoard } from "@/test/boardFixture";
 
 const mockResponse = (
   body: unknown,
@@ -85,9 +86,11 @@ describe("AuthApp", () => {
   });
 
   it("renders the authenticated board and username", async () => {
-    fetchMock.mockResolvedValueOnce(
-      mockResponse({ authenticated: true, username: "user" })
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        mockResponse({ authenticated: true, username: "user" })
+      )
+      .mockResolvedValueOnce(mockResponse(cloneBoard()));
 
     render(<AuthApp />);
 
@@ -101,6 +104,7 @@ describe("AuthApp", () => {
   it("returns to sign in after logout", async () => {
     fetchMock
       .mockResolvedValueOnce(mockResponse({ authenticated: true, username: "user" }))
+      .mockResolvedValueOnce(mockResponse(cloneBoard()))
       .mockResolvedValueOnce(
         mockResponse({ authenticated: false, username: null })
       );
@@ -108,6 +112,23 @@ describe("AuthApp", () => {
     await screen.findByRole("heading", { name: "Kanban Studio" });
 
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Kanban Studio" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to sign in when board loading is unauthorized", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        mockResponse({ authenticated: true, username: "user" })
+      )
+      .mockResolvedValueOnce(
+        mockResponse({ detail: "Authentication required" }, 401)
+      );
+
+    render(<AuthApp />);
 
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
     expect(

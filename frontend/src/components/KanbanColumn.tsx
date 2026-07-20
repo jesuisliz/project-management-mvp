@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import type { CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import type { Card, Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
@@ -10,20 +10,50 @@ type KanbanColumnProps = {
   column: Column;
   accent: string;
   cards: Card[];
-  onRename: (columnId: string, title: string) => void;
-  onAddCard: (columnId: string, title: string, details: string) => void;
-  onDeleteCard: (columnId: string, cardId: string) => void;
+  isMutating: boolean;
+  onRename: (columnId: string, title: string) => Promise<boolean>;
+  onAddCard: (
+    columnId: string,
+    title: string,
+    details: string
+  ) => Promise<boolean>;
+  onEditCard: (
+    cardId: string,
+    title: string,
+    details: string
+  ) => Promise<boolean>;
+  onDeleteCard: (cardId: string) => Promise<boolean>;
 };
 
 export const KanbanColumn = ({
   column,
   accent,
   cards,
+  isMutating,
   onRename,
   onAddCard,
+  onEditCard,
   onDeleteCard,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const [title, setTitle] = useState(column.title);
+  const cancelRename = useRef(false);
+
+  const saveTitle = async () => {
+    if (cancelRename.current) {
+      cancelRename.current = false;
+      setTitle(column.title);
+      return;
+    }
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || trimmedTitle === column.title) {
+      setTitle(column.title);
+      return;
+    }
+    if (!(await onRename(column.id, trimmedTitle))) {
+      setTitle(column.title);
+    }
+  };
 
   return (
     <section
@@ -52,8 +82,17 @@ export const KanbanColumn = ({
           </label>
           <input
             id={`column-title-${column.id}`}
-            value={column.title}
-            onChange={(event) => onRename(column.id, event.target.value)}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() => void saveTitle()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                cancelRename.current = true;
+                event.currentTarget.blur();
+              }
+            }}
+            disabled={isMutating}
             className="column-title-input mt-1.5 w-full rounded-xl border bg-white/80 px-3 py-2 font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
             aria-label="Column title"
             title="Click to rename this column"
@@ -66,7 +105,9 @@ export const KanbanColumn = ({
             <KanbanCard
               key={card.id}
               card={card}
-              onDelete={(cardId) => onDeleteCard(column.id, cardId)}
+              isDisabled={isMutating}
+              onEdit={onEditCard}
+              onDelete={onDeleteCard}
             />
           ))}
         </SortableContext>
@@ -78,6 +119,7 @@ export const KanbanColumn = ({
       </div>
       <NewCardForm
         onAdd={(title, details) => onAddCard(column.id, title, details)}
+        isDisabled={isMutating}
       />
     </section>
   );

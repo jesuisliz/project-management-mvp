@@ -142,16 +142,16 @@ Propose the SQLite data model and persistence rules as documentation, then obtai
 
 ### Checklist
 
-- [ ] Inventory every state transition required by the UI and future AI operations: load board, rename column, create/edit/delete/move card, and preserve ordering.
-- [ ] Define user ownership even though the MVP exposes only the hardcoded user.
-- [ ] Define one board per user, fixed ordered columns with editable titles, ordered cards, stable IDs, and timestamps only where they serve an MVP need.
-- [ ] Define keys, foreign keys, uniqueness constraints, ordering fields, indexes, and delete behavior.
-- [ ] Specify deterministic creation and seed behavior for a new database and a user's first board.
-- [ ] Save the proposed schema as machine-readable JSON in `docs/`.
-- [ ] Document the chosen Python/SQLite access approach, transaction boundaries, database file location, container volume, initialization behavior, and testing strategy.
-- [ ] Include sample board JSON showing the API-facing shape separately from the relational storage schema.
-- [ ] Review the proposal against future multi-user support without adding multi-board UI or permissions features.
-- [ ] Receive explicit user approval of the schema and database approach.
+- [x] Inventory every state transition required by the UI and future AI operations: load board, rename column, create/edit/delete/move card, and preserve ordering.
+- [x] Define user ownership even though the MVP exposes only the hardcoded user.
+- [x] Define one board per user, fixed ordered columns with editable titles, ordered cards, stable IDs, and timestamps only where they serve an MVP need.
+- [x] Define keys, foreign keys, uniqueness constraints, ordering fields, indexes, and delete behavior.
+- [x] Specify deterministic creation and seed behavior for a new database and a user's first board.
+- [x] Save the proposed schema as machine-readable JSON in `docs/`.
+- [x] Document the chosen Python/SQLite access approach, transaction boundaries, database file location, container volume, initialization behavior, and testing strategy.
+- [x] Include sample board JSON showing the API-facing shape separately from the relational storage schema.
+- [x] Review the proposal against future multi-user support without adding multi-board UI or permissions features.
+- [x] Receive explicit user approval of the schema and database approach.
 
 ### Tests
 
@@ -175,18 +175,18 @@ Implement the approved SQLite model and authenticated FastAPI routes for reading
 
 ### Checklist
 
-- [ ] Add the approved database dependencies and configuration.
-- [ ] Create the SQLite database and schema automatically when the configured database file does not exist.
-- [ ] Enable and test SQLite foreign-key enforcement.
-- [ ] Create the hardcoded MVP user and its initial board idempotently.
-- [ ] Add Pydantic request/response models for the canonical board representation.
-- [ ] Add an authenticated route to fetch the current user's board.
-- [ ] Add routes to rename a column and create, edit, delete, and move a card.
-- [ ] Validate ownership, fixed-column constraints, required card fields, IDs, and move destinations.
-- [ ] Make board mutations transactional so ordering and card membership cannot be partially updated.
-- [ ] Return small, consistent HTTP errors for invalid input, missing resources, and unauthenticated requests.
-- [ ] Keep persistence/business logic separate from HTTP route wiring only where that separation reduces duplication and improves tests.
-- [ ] Update backend documentation and test commands.
+- [x] Add the approved database dependencies and configuration.
+- [x] Create the SQLite database and schema automatically when the configured database file does not exist.
+- [x] Enable and test SQLite foreign-key enforcement.
+- [x] Create the hardcoded MVP user and its initial board idempotently.
+- [x] Add Pydantic request/response models for the canonical board representation.
+- [x] Add an authenticated route to fetch the current user's board.
+- [x] Add routes to rename a column and create, edit, delete, and move a card.
+- [x] Validate ownership, fixed-column constraints, required card fields, IDs, and move destinations.
+- [x] Make board mutations transactional so ordering and card membership cannot be partially updated.
+- [x] Return small, consistent HTTP errors for invalid input, missing resources, and unauthenticated requests.
+- [x] Keep persistence/business logic separate from HTTP route wiring only where that separation reduces duplication and improves tests.
+- [x] Update backend documentation and test commands.
 
 ### Tests
 
@@ -212,16 +212,16 @@ Replace the frontend's in-memory demo state with the authenticated board API so 
 
 ### Checklist
 
-- [ ] Define a small typed frontend API client for session and board routes.
-- [ ] Load the current user's board after successful session bootstrap/login.
-- [ ] Add clear loading and actionable error states for the initial board request.
-- [ ] Wire column rename, card create, card edit, card delete, reorder, and cross-column move to backend mutations.
-- [ ] Add the missing card-editing UI required by the business requirements.
-- [ ] Update local UI from confirmed server responses, using optimistic behavior only where rollback remains simple.
-- [ ] Prevent overlapping mutations that could corrupt visible ordering.
-- [ ] Handle unauthorized responses by returning to login.
-- [ ] Remove production reliance on `initialData`; retain explicit fixtures only in tests or first-board seeding code.
-- [ ] Keep the fixed five-column layout and existing visual language.
+- [x] Define a small typed frontend API client for session and board routes.
+- [x] Load the current user's board after successful session bootstrap/login.
+- [x] Add clear loading and actionable error states for the initial board request.
+- [x] Wire column rename, card create, card edit, card delete, reorder, and cross-column move to backend mutations.
+- [x] Add the missing card-editing UI required by the business requirements.
+- [x] Update local UI from confirmed server responses, using optimistic behavior only where rollback remains simple.
+- [x] Prevent overlapping mutations that could corrupt visible ordering.
+- [x] Handle unauthorized responses by returning to login.
+- [x] Remove production reliance on `initialData`; retain explicit fixtures only in tests or first-board seeding code.
+- [x] Keep the fixed five-column layout and existing visual language.
 
 ### Tests
 

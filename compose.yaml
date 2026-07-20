@@ -5,6 +5,10 @@ services:
       target: production
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_PATH: /app/data/pm.db
+    volumes:
+      - pm-data:/app/data
     healthcheck:
       test:
         - CMD
@@ -15,3 +19,6 @@ services:
       timeout: 2s
       retries: 15
       start_period: 2s
+
+volumes:
+  pm-data:

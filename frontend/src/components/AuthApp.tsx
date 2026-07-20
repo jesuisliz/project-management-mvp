@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
-
-type SessionPayload = {
-  authenticated: boolean;
-  username: string | null;
-};
+import { ApiError, sessionApi } from "@/lib/api";
 
 type SessionState =
   | { status: "loading" }
@@ -34,27 +30,16 @@ const LoginForm = ({ onSignedIn }: LoginFormProps) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
-
-      if (response.status === 401) {
-        setError("Invalid username or password.");
-        return;
-      }
-      if (!response.ok) {
-        throw new Error("Login request failed");
-      }
-
-      const session = (await response.json()) as SessionPayload;
+      const session = await sessionApi.login(username.trim(), password);
       if (!session.authenticated || !session.username) {
         throw new Error("Login response was not authenticated");
       }
       onSignedIn(session.username);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setError("Invalid username or password.");
+        return;
+      }
       setError("Unable to sign in. Check that the server is running.");
     } finally {
       setIsSubmitting(false);
@@ -164,31 +149,28 @@ export const AuthApp = () => {
   const [session, setSession] = useState<SessionState>({ status: "loading" });
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const handleUnauthorized = useCallback(
+    () => setSession({ status: "anonymous" }),
+    []
+  );
 
   useEffect(() => {
     let isActive = true;
 
     const loadSession = async () => {
       try {
-        const response = await fetch("/api/auth/session", {
-          credentials: "same-origin",
-        });
-        if (response.status === 401) {
-          if (isActive) setSession({ status: "anonymous" });
-          return;
-        }
-        if (!response.ok) {
-          throw new Error("Session request failed");
-        }
-
-        const current = (await response.json()) as SessionPayload;
+        const current = await sessionApi.current();
         if (!isActive) return;
         setSession(
           current.authenticated && current.username
             ? { status: "authenticated", username: current.username }
             : { status: "anonymous" }
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          if (isActive) setSession({ status: "anonymous" });
+          return;
+        }
         if (isActive) setSession({ status: "anonymous" });
       }
     };
@@ -203,16 +185,13 @@ export const AuthApp = () => {
     setIsLoggingOut(true);
     setLogoutError(null);
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-      if (response.ok || response.status === 401) {
+      await sessionApi.logout();
+      setSession({ status: "anonymous" });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
         setSession({ status: "anonymous" });
         return;
       }
-      throw new Error("Logout request failed");
-    } catch {
       setLogoutError("Unable to log out. Please try again.");
     } finally {
       setIsLoggingOut(false);
@@ -248,6 +227,7 @@ export const AuthApp = () => {
       onLogout={handleLogout}
       isLoggingOut={isLoggingOut}
       authError={logoutError}
+      onUnauthorized={handleUnauthorized}
     />
   );
 };

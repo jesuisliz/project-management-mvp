@@ -30,6 +30,12 @@ Sign in with:
 This is local MVP authentication only. Sessions are kept in server memory and
 are not intended for production use.
 
+Board data is stored in SQLite on the Compose-managed `pm-data` volume and
+persists when the application container is stopped or recreated.
+
+Column renames and card creation, inline editing, deletion, reordering, and
+cross-column movement are saved through the authenticated board API.
+
 ## Tests
 
 Frontend:
