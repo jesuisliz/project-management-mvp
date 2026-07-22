@@ -59,27 +59,29 @@ export const KanbanColumn = ({
     <section
       ref={setNodeRef}
       className={clsx(
-        "column-shell flex min-h-[520px] flex-col rounded-3xl border p-4 shadow-[var(--shadow)] transition",
+        "column-shell flex min-h-[520px] flex-col rounded-2xl border p-4 shadow-[var(--shadow)] transition",
         isOver && "-translate-y-1 ring-2 ring-[var(--column-accent)]"
       )}
       style={{ "--column-accent": accent } as CSSProperties}
       data-testid={`column-${column.id}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="w-full">
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-10 rounded-full bg-[var(--column-accent)] shadow-[0_0_14px_var(--column-accent)]" />
-            <span className="rounded-full bg-white/75 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="h-9 w-1.5 shrink-0 rounded-full bg-[var(--column-accent)] shadow-[0_0_14px_var(--column-accent)]"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor={`column-title-${column.id}`}
+              className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--gray-text)]"
+            >
+              Column
+            </label>
+            <span className="rounded-full bg-white/75 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
               {cards.length} {cards.length === 1 ? "card" : "cards"}
             </span>
           </div>
-          <label
-            htmlFor={`column-title-${column.id}`}
-            className="mt-4 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]"
-          >
-            <span>Column name</span>
-            <span className="text-[var(--column-accent)]">Click to rename</span>
-          </label>
           <input
             id={`column-title-${column.id}`}
             value={title}
@@ -106,6 +108,7 @@ export const KanbanColumn = ({
             <KanbanCard
               key={card.id}
               card={card}
+              accent={accent}
               isDisabled={isMutating}
               onEdit={onEditCard}
               onDelete={onDeleteCard}

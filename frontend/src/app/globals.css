@@ -70,13 +70,14 @@ body {
 
 .column-shell {
   border-color: color-mix(in srgb, var(--column-accent) 24%, var(--stroke));
-  border-top: 4px solid var(--column-accent);
+  border-top: 3px solid var(--column-accent);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--column-accent) 9%, white) 0,
     rgba(255, 255, 255, 0.78) 150px
   );
   backdrop-filter: blur(10px);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .column-title-input {
@@ -96,7 +97,9 @@ body {
 }
 
 .card-surface {
-  border-color: color-mix(in srgb, var(--column-accent) 10%, var(--stroke));
+  border-color: var(--stroke);
+  border-left: 3px solid var(--column-accent);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .add-card-button {
@@ -109,4 +112,46 @@ body {
   border-color: var(--column-accent);
   background: color-mix(in srgb, var(--column-accent) 8%, white);
   outline: none;
+}
+
+.icon-btn {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  color: var(--gray-text);
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease,
+    transform 150ms ease;
+}
+
+.icon-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--stroke);
+}
+
+.icon-btn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.icon-btn--edit:hover:not(:disabled),
+.icon-btn--edit:focus-visible {
+  color: var(--primary-blue);
+  background: color-mix(in srgb, var(--primary-blue) 10%, transparent);
+}
+
+.icon-btn--delete:hover:not(:disabled),
+.icon-btn--delete:focus-visible {
+  color: #c23b2c;
+  background: rgba(242, 107, 91, 0.12);
+  border-color: rgba(242, 107, 91, 0.3);
+}
+
+.tech-grid {
+  background-image: radial-gradient(rgba(3, 33, 71, 0.14) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 0%, black 30%, transparent 75%);
 }

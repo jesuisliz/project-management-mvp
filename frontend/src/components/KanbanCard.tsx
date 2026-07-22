@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
@@ -6,6 +6,7 @@ import { MAX_DETAILS_LENGTH, MAX_TITLE_LENGTH, type Card } from "@/lib/kanban";
 
 type KanbanCardProps = {
   card: Card;
+  accent: string;
   isDisabled: boolean;
   onEdit: (cardId: string, title: string, details: string) => Promise<boolean>;
   onDelete: (cardId: string) => Promise<boolean>;
@@ -13,6 +14,7 @@ type KanbanCardProps = {
 
 export const KanbanCard = ({
   card,
+  accent,
   isDisabled,
   onEdit,
   onDelete,
@@ -53,9 +55,9 @@ export const KanbanCard = ({
   return (
     <article
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, "--column-accent": accent } as CSSProperties}
       className={clsx(
-        "card-surface rounded-2xl border bg-white px-4 py-4 shadow-[0_10px_24px_rgba(3,33,71,0.08)]",
+        "card-surface rounded-xl border bg-white px-4 py-4 shadow-[0_10px_24px_rgba(3,33,71,0.08)]",
         "transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(3,33,71,0.13)]",
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
@@ -104,7 +106,7 @@ export const KanbanCard = ({
         </form>
       ) : (
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
               {card.title}
             </h4>
@@ -112,13 +114,64 @@ export const KanbanCard = ({
               {card.details || "No details yet."}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setTitle(card.title);
+                setDetails(card.details);
+                setIsEditing(true);
+              }}
+              disabled={isDisabled}
+              className="icon-btn icon-btn--edit"
+              aria-label={`Edit ${card.title}`}
+              title="Edit card"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => void onDelete(card.id)}
+              disabled={isDisabled}
+              className="icon-btn icon-btn--delete"
+              aria-label={`Delete ${card.title}`}
+              title="Delete card"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+              </svg>
+            </button>
             <button
               ref={setActivatorNodeRef}
               type="button"
               disabled={isDisabled}
-              className="cursor-grab rounded-full border border-transparent p-1.5 text-[var(--gray-text)] hover:border-[var(--stroke)] disabled:cursor-wait disabled:opacity-60"
+              className="icon-btn cursor-grab"
               aria-label={`Drag ${card.title}`}
+              title="Drag to move"
               {...attributes}
               {...listeners}
             >
@@ -135,28 +188,6 @@ export const KanbanCard = ({
                 <circle cx="3" cy="15" r="1.5" />
                 <circle cx="9" cy="15" r="1.5" />
               </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTitle(card.title);
-                setDetails(card.details);
-                setIsEditing(true);
-              }}
-              disabled={isDisabled}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--primary-blue)] transition hover:border-[var(--stroke)] disabled:opacity-60"
-              aria-label={`Edit ${card.title}`}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => void onDelete(card.id)}
-              disabled={isDisabled}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)] disabled:opacity-60"
-              aria-label={`Delete ${card.title}`}
-            >
-              Remove
             </button>
           </div>
         </div>

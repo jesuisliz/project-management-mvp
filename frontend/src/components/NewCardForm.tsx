@@ -26,7 +26,7 @@ export const NewCardForm = ({ onAdd, isDisabled }: NewCardFormProps) => {
   return (
     <div className="mt-4">
       {isOpen ? (
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-[var(--stroke)] bg-white/75 p-3">
+        <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-[var(--stroke)] bg-white/75 p-3">
           <input
             value={formState.title}
             onChange={(event) =>
@@ -74,9 +74,20 @@ export const NewCardForm = ({ onAdd, isDisabled }: NewCardFormProps) => {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="add-card-button w-full rounded-full border border-dashed px-3 py-2 text-xs font-semibold uppercase tracking-wide transition"
+          className="add-card-button flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs font-semibold uppercase tracking-wide transition"
           disabled={isDisabled}
         >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
           Add a card
         </button>
       )}

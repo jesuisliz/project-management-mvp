@@ -90,6 +90,7 @@ export const KanbanBoard = ({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [activeCardWidth, setActiveCardWidth] = useState<number | null>(null);
   const [chatVisibility, setChatVisibility] = useState<boolean | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -166,12 +167,16 @@ export const KanbanBoard = ({
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (!isMutating) setActiveCardId(event.active.id as string);
+    if (!isMutating) {
+      setActiveCardId(event.active.id as string);
+      setActiveCardWidth(event.active.rect.current.initial?.width ?? null);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveCardId(null);
+    setActiveCardWidth(null);
 
     if (!board || !over || active.id === over.id || isMutating) {
       return;
@@ -311,23 +316,21 @@ export const KanbanBoard = ({
       <div className="pointer-events-none absolute bottom-0 right-0 h-[560px] w-[560px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(139,92,246,0.2)_0%,_rgba(117,57,145,0.04)_58%,_transparent_75%)]" />
 
       <main className="relative mx-auto flex min-h-screen max-w-[1900px] flex-col gap-10 px-6 pb-16 pt-12">
-        <header className="board-hero flex flex-col gap-7 overflow-hidden rounded-[32px] p-8 text-white shadow-[var(--shadow-strong)]">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
+        <header className="board-hero relative flex flex-col gap-6 overflow-hidden rounded-[28px] p-7 text-white shadow-[var(--shadow-strong)] md:p-8">
+          <div className="tech-grid pointer-events-none absolute inset-0 opacity-40" />
+
+          <div className="relative flex flex-wrap items-center justify-between gap-5">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/65">
                 Single Board Kanban
               </p>
-              <h1 className="mt-3 font-display text-4xl font-semibold text-white">
+              <h1 className="mt-2 font-display text-3xl font-semibold text-white md:text-4xl">
                 Kanban Studio
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-white/70">
-                Keep momentum visible. Rename columns, drag cards between stages,
-                and capture quick notes without getting buried in settings.
-              </p>
             </div>
-            <div className="flex min-w-[280px] flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               {username && onLogout ? (
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 backdrop-blur-sm">
+                <div className="flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5 backdrop-blur-sm">
                   <p className="text-sm text-white/70">
                     Signed in as <strong className="text-white">{username}</strong>
                   </p>
@@ -341,31 +344,40 @@ export const KanbanBoard = ({
                   </button>
                 </div>
               ) : null}
-              <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
-                  Focus
-                </p>
-                <p className="mt-2 text-lg font-semibold text-white">
-                  One board. Five columns. Zero clutter.
-                </p>
-              </div>
               {!isChatOpen ? (
                 <button
                   type="button"
                   onClick={() => setChatVisibility(true)}
-                  className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-[var(--secondary-purple)] shadow-[0_12px_24px_rgba(3,33,71,0.18)] transition hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/30"
+                  className="rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-[var(--secondary-purple)] shadow-[0_12px_24px_rgba(3,33,71,0.18)] transition hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/30"
                 >
                   Open AI Assistant
                 </button>
               ) : null}
-              {authError ? (
-                <p role="alert" className="text-sm font-medium text-[#ffd6d1]">
-                  {authError}
-                </p>
-              ) : null}
             </div>
           </div>
-          <div>
+
+          <div className="relative flex flex-wrap items-end justify-between gap-6">
+            <p className="max-w-xl text-sm leading-6 text-white/70">
+              Keep momentum visible. Rename columns, drag cards between stages,
+              and capture quick notes without getting buried in settings.
+            </p>
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/55">
+                Focus
+              </p>
+              <p className="mt-1 text-base font-semibold text-white">
+                One board. Five columns. Zero clutter.
+              </p>
+            </div>
+          </div>
+
+          {authError ? (
+            <p role="alert" className="relative text-sm font-medium text-[#ffd6d1]">
+              {authError}
+            </p>
+          ) : null}
+
+          <div className="relative">
             <p className="mb-3 text-xs font-medium text-white/65">
               Select a column below to rename it
             </p>
@@ -400,7 +412,7 @@ export const KanbanBoard = ({
         ) : null}
 
         <div className="flex min-w-0 items-start gap-6">
-          <div className="min-w-0 flex-1 overflow-x-auto pb-3">
+          <div className="min-w-0 flex-1 pb-3">
             <DndContext
               id="kanban-board-dnd"
               sensors={sensors}
@@ -408,7 +420,7 @@ export const KanbanBoard = ({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <section className="grid gap-6 lg:min-w-[1100px] lg:grid-cols-5">
+              <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
                 {board.columns.map((column, index) => (
                   <KanbanColumn
                     key={`${column.id}:${column.title}`}
@@ -425,7 +437,7 @@ export const KanbanBoard = ({
               </section>
               <DragOverlay>
                 {activeCard ? (
-                  <div className="w-[260px]">
+                  <div style={{ width: activeCardWidth ?? 260 }}>
                     <KanbanCardPreview card={activeCard} />
                   </div>
                 ) : null}
