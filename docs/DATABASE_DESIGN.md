@@ -1,5 +1,22 @@
 # Part 5 database design
 
+## Update (Parts 11-13)
+
+This document describes the original Part 5-10 schema. Parts 11-13 changed
+three things the rest of this document still describes as fixed:
+
+- `users` gained `password_hash`; registration and login are now DB-backed
+  (salted PBKDF2 via `hashlib`), not the hardcoded MVP check.
+- `boards.user_id` is no longer unique and `boards` gained a `name` column —
+  a user can own many boards, not exactly one. Every board lookup now
+  resolves `(username, board_id)` together instead of `username` alone.
+- Two new tables, `labels` (board-scoped catalog: id, name, color) and
+  `card_labels` (join table), support per-board label management and
+  per-card label assignment.
+
+The current schema lives in `backend/database.py`; treat that as authoritative
+where it disagrees with the narrative below.
+
 ## Scope
 
 This document proposes the SQLite design for Parts 6 through 10. Part 5 adds

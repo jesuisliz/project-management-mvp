@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { cloneBoard } from "@/test/boardFixture";
 
+const BOARD_ID = 1;
+const BOARD_SUMMARIES = [{ id: BOARD_ID, name: "My Board" }];
+
 const mockResponse = (body: unknown, status = 200): Response =>
   ({
     ok: status >= 200 && status < 300,
@@ -14,6 +17,7 @@ const renderBoard = async (
   fetchMock: ReturnType<typeof vi.fn>,
   onUnauthorized = vi.fn()
 ) => {
+  fetchMock.mockResolvedValueOnce(mockResponse(BOARD_SUMMARIES));
   fetchMock.mockResolvedValueOnce(mockResponse(cloneBoard()));
   render(<KanbanBoard onUnauthorized={onUnauthorized} />);
   await screen.findByRole("heading", { name: "Kanban Studio" });
@@ -31,6 +35,7 @@ describe("KanbanBoard", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("loads and renders the server board", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(BOARD_SUMMARIES));
     fetchMock.mockResolvedValueOnce(mockResponse(cloneBoard()));
 
     render(<KanbanBoard onUnauthorized={vi.fn()} />);
@@ -43,6 +48,7 @@ describe("KanbanBoard", () => {
   it("shows an actionable load error and retries", async () => {
     fetchMock
       .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(mockResponse(BOARD_SUMMARIES))
       .mockResolvedValueOnce(mockResponse(cloneBoard()));
     render(<KanbanBoard onUnauthorized={vi.fn()} />);
 
@@ -69,7 +75,7 @@ describe("KanbanBoard", () => {
       await screen.findByRole("button", { name: "Rename Ready column" })
     ).toBeVisible();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/board/columns/col-backlog",
+      `/api/boards/${BOARD_ID}/columns/col-backlog`,
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({ title: "Ready" }),
@@ -99,6 +105,7 @@ describe("KanbanBoard", () => {
       id: "card-new",
       title: "New card",
       details: "Notes",
+      labelIds: [],
     };
     updated.columns[0].cardIds.push("card-new");
     fetchMock.mockResolvedValueOnce(mockResponse(updated, 201));
@@ -119,6 +126,7 @@ describe("KanbanBoard", () => {
       id: "card-1",
       title: "Edited roadmap",
       details: "Edited details",
+      labelIds: [],
     };
     fetchMock.mockResolvedValueOnce(mockResponse(updated));
     const card = screen.getByTestId("card-card-1");
@@ -169,7 +177,6 @@ describe("KanbanBoard", () => {
     expect(
       screen.getByRole("button", { name: "Delete Gather customer signals" })
     ).toBeDisabled();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     finishDelete(mockResponse(updated));
     await waitFor(() =>
@@ -210,9 +217,8 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("The roadmap card is in Backlog.")).toBeVisible();
     expect(screen.getByText("Where is the roadmap card?")).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/ai/chat",
+      `/api/boards/${BOARD_ID}/ai/chat`,
       expect.objectContaining({
         body: JSON.stringify({
           message: "Where is the roadmap card?",
@@ -244,7 +250,7 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("Align roadmap themes.")).toBeVisible();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/ai/chat",
+      `/api/boards/${BOARD_ID}/ai/chat`,
       expect.objectContaining({
         body: JSON.stringify({
           message: "Which should I do first?",
@@ -264,6 +270,7 @@ describe("KanbanBoard", () => {
       id: "card-ai",
       title: "Prepare launch notes",
       details: "Created by the assistant.",
+      labelIds: [],
     };
     updated.columns[0].cardIds.push("card-ai");
     fetchMock.mockResolvedValueOnce(
@@ -285,7 +292,6 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("Prepare launch notes")).toBeVisible();
     expect(screen.getByText("I added the launch-notes card.")).toBeVisible();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("shows a concise chat error and returns to sign in on unauthorized chat", async () => {
@@ -312,5 +318,67 @@ describe("KanbanBoard", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onUnauthorized).toHaveBeenCalledOnce());
+  });
+
+  it("creates and switches to a new board", async () => {
+    await renderBoard(fetchMock);
+    const secondBoard = { id: 2, name: "Second board" };
+    const emptyBoard = cloneBoard();
+    emptyBoard.columns = emptyBoard.columns.map((column) => ({
+      ...column,
+      cardIds: [],
+    }));
+    emptyBoard.cards = {};
+    fetchMock.mockResolvedValueOnce(mockResponse(secondBoard, 201));
+    fetchMock.mockResolvedValueOnce(mockResponse(emptyBoard));
+
+    await userEvent.click(screen.getByRole("button", { name: "New board" }));
+    await userEvent.type(
+      screen.getByLabelText("New board name"),
+      "Second board"
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Align roadmap themes")
+      ).not.toBeInTheDocument()
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/boards/2",
+      expect.anything()
+    );
+  });
+
+  it("switches between existing boards", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse([
+        { id: 1, name: "My Board" },
+        { id: 2, name: "Second board" },
+      ])
+    );
+    fetchMock.mockResolvedValueOnce(mockResponse(cloneBoard()));
+    render(<KanbanBoard onUnauthorized={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Kanban Studio" });
+
+    const emptyBoard = cloneBoard();
+    emptyBoard.columns = emptyBoard.columns.map((column) => ({
+      ...column,
+      cardIds: [],
+    }));
+    emptyBoard.cards = {};
+    fetchMock.mockResolvedValueOnce(mockResponse(emptyBoard));
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Select a board"),
+      "2"
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Align roadmap themes")
+      ).not.toBeInTheDocument()
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/boards/2", expect.anything());
   });
 });

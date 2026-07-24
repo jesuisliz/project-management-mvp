@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useRef, useState, type CSSProperties } from "react";
-import { MAX_TITLE_LENGTH, type Card, type Column } from "@/lib/kanban";
+import { MAX_TITLE_LENGTH, type Card, type Column, type Label } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
 
@@ -10,6 +10,7 @@ type KanbanColumnProps = {
   column: Column;
   accent: string;
   cards: Card[];
+  labels: Label[];
   isMutating: boolean;
   onRename: (columnId: string, title: string) => Promise<boolean>;
   onAddCard: (
@@ -23,17 +24,24 @@ type KanbanColumnProps = {
     details: string
   ) => Promise<boolean>;
   onDeleteCard: (cardId: string) => Promise<boolean>;
+  onToggleLabel: (
+    cardId: string,
+    labelId: string,
+    assign: boolean
+  ) => Promise<boolean>;
 };
 
 export const KanbanColumn = ({
   column,
   accent,
   cards,
+  labels,
   isMutating,
   onRename,
   onAddCard,
   onEditCard,
   onDeleteCard,
+  onToggleLabel,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const [title, setTitle] = useState(column.title);
@@ -110,8 +118,10 @@ export const KanbanColumn = ({
               card={card}
               accent={accent}
               isDisabled={isMutating}
+              labels={labels}
               onEdit={onEditCard}
               onDelete={onDeleteCard}
+              onToggleLabel={onToggleLabel}
             />
           ))}
         </SortableContext>

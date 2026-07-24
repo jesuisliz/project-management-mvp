@@ -1,10 +1,13 @@
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_DETAILS_LENGTH = 4_000;
+export const MAX_LABEL_NAME_LENGTH = 40;
+export const MAX_BOARD_NAME_LENGTH = 100;
 
 export type Card = {
   id: string;
   title: string;
   details: string;
+  labelIds: string[];
 };
 
 export type Column = {
@@ -13,9 +16,21 @@ export type Column = {
   cardIds: string[];
 };
 
+export type Label = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type BoardData = {
   columns: Column[];
   cards: Record<string, Card>;
+  labels: Label[];
+};
+
+export type BoardSummary = {
+  id: number;
+  name: string;
 };
 
 const isColumnId = (columns: Column[], id: string) =>

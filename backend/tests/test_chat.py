@@ -20,9 +20,14 @@ from backend.database import (
     create_card,
     get_board,
     initialize_database,
+    list_boards,
     provision_user,
 )
 from backend.main import create_app
+
+
+def board_id(database_path: Path, username: str) -> int:
+    return list_boards(database_path, username)[0]["id"]
 
 
 class FakeAIService:
@@ -199,11 +204,13 @@ def test_structured_chat_schema_rejects_oversized_title_or_details() -> None:
 def test_chat_uses_authoritative_board_and_bounded_history(
     database_path: Path,
 ) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     service = FakeAIService()
     with TestClient(create_app(database_path, service)) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={
                 "message": "What should I do next?",
                 "history": [
@@ -237,11 +244,13 @@ def test_chat_uses_authoritative_board_and_bounded_history(
 
 
 def test_chat_rejects_client_board_snapshots(database_path: Path) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     service = FakeAIService()
     with TestClient(create_app(database_path, service)) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={
                 "message": "Move a card",
                 "history": [],
@@ -254,14 +263,32 @@ def test_chat_rejects_client_board_snapshots(database_path: Path) -> None:
 
 
 def test_chat_requires_authentication(database_path: Path) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     service = FakeAIService()
     with TestClient(create_app(database_path, service)) as client:
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Hello", "history": []},
         )
 
     assert response.status_code == 401
+    assert service.request is None
+
+
+def test_chat_rejects_another_users_board(database_path: Path) -> None:
+    initialize_database(database_path)
+    provision_user(database_path, "other-user")
+    other_board_id = board_id(database_path, "other-user")
+    service = FakeAIService()
+    with TestClient(create_app(database_path, service)) as client:
+        login(client)
+        response = client.post(
+            f"/api/boards/{other_board_id}/ai/chat",
+            json={"message": "Hello", "history": []},
+        )
+
+    assert response.status_code == 404
     assert service.request is None
 
 
@@ -290,10 +317,12 @@ def test_chat_bounds_untrusted_conversation_input(
     database_path: Path,
     payload: dict[str, object],
 ) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     service = FakeAIService()
     with TestClient(create_app(database_path, service)) as client:
         login(client)
-        response = client.post("/api/ai/chat", json=payload)
+        response = client.post(f"/api/boards/{bid}/ai/chat", json=payload)
 
     assert response.status_code == 422
     assert service.request is None
@@ -303,6 +332,9 @@ def test_reply_only_chat_does_not_call_database_mutation(
     database_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
+
     def unexpected_mutation(*_: object, **__: object) -> None:
         raise AssertionError("Reply-only chat attempted a database mutation")
 
@@ -310,7 +342,7 @@ def test_reply_only_chat_does_not_call_database_mutation(
     with TestClient(create_app(database_path, FakeAIService())) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Just say hello", "history": []},
         )
 
@@ -319,6 +351,8 @@ def test_reply_only_chat_does_not_call_database_mutation(
 
 
 def test_chat_returns_persisted_board_after_mutation(database_path: Path) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     result = StructuredChatResponse(
         reply="Added the release task.",
         operations=[
@@ -337,10 +371,10 @@ def test_chat_returns_persisted_board_after_mutation(database_path: Path) -> Non
     ) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Add a release task", "history": []},
         )
-        saved_board = client.get("/api/board").json()
+        saved_board = client.get(f"/api/boards/{bid}").json()
 
     assert response.status_code == 200
     assert response.json()["boardChanged"] is True
@@ -354,6 +388,8 @@ def test_chat_returns_persisted_board_after_mutation(database_path: Path) -> Non
 def test_invalid_ai_batch_returns_safe_error_and_rolls_back(
     database_path: Path,
 ) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     result = StructuredChatResponse(
         reply="Updated it.",
         operations=[
@@ -379,12 +415,12 @@ def test_invalid_ai_batch_returns_safe_error_and_rolls_back(
         create_app(database_path, FakeAIService(result=result))
     ) as client:
         login(client)
-        board_before = client.get("/api/board").json()
+        board_before = client.get(f"/api/boards/{bid}").json()
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Update two cards", "history": []},
         )
-        board_after = client.get("/api/board").json()
+        board_after = client.get(f"/api/boards/{bid}").json()
 
     assert response.status_code == 502
     assert response.json() == {"detail": "AI returned invalid board changes"}
@@ -392,12 +428,14 @@ def test_invalid_ai_batch_returns_safe_error_and_rolls_back(
 
 
 def test_provider_failure_does_not_leak_details(database_path: Path) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     secret = "provider-secret-detail"
     service = FakeAIService(error=AIServiceError(secret))
     with TestClient(create_app(database_path, service)) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Hello", "history": []},
         )
 
@@ -407,11 +445,13 @@ def test_provider_failure_does_not_leak_details(database_path: Path) -> None:
 
 
 def test_missing_configuration_returns_concise_error(database_path: Path) -> None:
+    initialize_database(database_path)
+    bid = board_id(database_path, "user")
     service = FakeAIService(error=AIConfigurationError("secret config detail"))
     with TestClient(create_app(database_path, service)) as client:
         login(client)
         response = client.post(
-            "/api/ai/chat",
+            f"/api/boards/{bid}/ai/chat",
             json={"message": "Hello", "history": []},
         )
 
@@ -422,10 +462,12 @@ def test_missing_configuration_returns_concise_error(database_path: Path) -> Non
 
 def test_all_card_operation_types_apply_in_order(database_path: Path) -> None:
     initialize_database(database_path)
+    bid = board_id(database_path, "user")
 
     board = apply_card_operations(
         database_path,
         "user",
+        bid,
         [
             {
                 "type": "create_card",
@@ -459,6 +501,7 @@ def test_all_card_operation_types_apply_in_order(database_path: Path) -> None:
         "id": "card-1",
         "title": "AI-edited card",
         "details": "Edited in the batch.",
+        "labelIds": [],
     }
     assert columns["col-backlog"]["cardIds"][0] == "card-2"
     assert columns["col-review"]["cardIds"][0] == "card-3"
@@ -472,10 +515,12 @@ def test_ordered_multi_card_moves_use_prior_operation_results(
     database_path: Path,
 ) -> None:
     initialize_database(database_path)
+    bid = board_id(database_path, "user")
 
     board = apply_card_operations(
         database_path,
         "user",
+        bid,
         [
             {
                 "type": "move_card",
@@ -500,12 +545,14 @@ def test_ordered_multi_card_moves_use_prior_operation_results(
 
 def test_unknown_column_is_rejected_before_any_write(database_path: Path) -> None:
     initialize_database(database_path)
-    before = get_board(database_path, "user")
+    bid = board_id(database_path, "user")
+    before = get_board(database_path, "user", bid)
 
     with pytest.raises(ColumnNotFoundError):
         apply_card_operations(
             database_path,
             "user",
+            bid,
             [
                 {
                     "type": "edit_card",
@@ -522,15 +569,18 @@ def test_unknown_column_is_rejected_before_any_write(database_path: Path) -> Non
             ],
         )
 
-    assert get_board(database_path, "user") == before
+    assert get_board(database_path, "user", bid) == before
 
 
 def test_operations_cannot_mutate_another_users_card(database_path: Path) -> None:
     initialize_database(database_path)
+    bid = board_id(database_path, "user")
     provision_user(database_path, "other-user")
+    other_board_id = board_id(database_path, "other-user")
     other_board = create_card(
         database_path,
         "other-user",
+        other_board_id,
         "col-backlog",
         "Other user's unique card",
         "Private to the other board.",
@@ -540,13 +590,14 @@ def test_operations_cannot_mutate_another_users_card(database_path: Path) -> Non
         for card_id, card in other_board["cards"].items()
         if card["title"] == "Other user's unique card"
     )
-    user_before = get_board(database_path, "user")
-    other_before = get_board(database_path, "other-user")
+    user_before = get_board(database_path, "user", bid)
+    other_before = get_board(database_path, "other-user", other_board_id)
 
     with pytest.raises(CardNotFoundError):
         apply_card_operations(
             database_path,
             "user",
+            bid,
             [
                 {
                     "type": "edit_card",
@@ -557,5 +608,5 @@ def test_operations_cannot_mutate_another_users_card(database_path: Path) -> Non
             ],
         )
 
-    assert get_board(database_path, "user") == user_before
-    assert get_board(database_path, "other-user") == other_before
+    assert get_board(database_path, "user", bid) == user_before
+    assert get_board(database_path, "other-user", other_board_id) == other_before

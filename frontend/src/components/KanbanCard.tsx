@@ -2,26 +2,41 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import { MAX_DETAILS_LENGTH, MAX_TITLE_LENGTH, type Card } from "@/lib/kanban";
+import {
+  MAX_DETAILS_LENGTH,
+  MAX_TITLE_LENGTH,
+  type Card,
+  type Label,
+} from "@/lib/kanban";
 
 type KanbanCardProps = {
   card: Card;
   accent: string;
   isDisabled: boolean;
+  labels: Label[];
   onEdit: (cardId: string, title: string, details: string) => Promise<boolean>;
   onDelete: (cardId: string) => Promise<boolean>;
+  onToggleLabel: (
+    cardId: string,
+    labelId: string,
+    assign: boolean
+  ) => Promise<boolean>;
 };
 
 export const KanbanCard = ({
   card,
   accent,
   isDisabled,
+  labels,
   onEdit,
   onDelete,
+  onToggleLabel,
 }: KanbanCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
+  const [isLabelMenuOpen, setIsLabelMenuOpen] = useState(false);
+  const cardLabels = labels.filter((label) => card.labelIds.includes(label.id));
   const {
     attributes,
     listeners,
@@ -107,6 +122,19 @@ export const KanbanCard = ({
       ) : (
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
+            {cardLabels.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {cardLabels.map((label) => (
+                  <span
+                    key={label.id}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                    style={{ backgroundColor: label.color }}
+                  >
+                    {label.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
               {card.title}
             </h4>
@@ -114,7 +142,64 @@ export const KanbanCard = ({
               {card.details || "No details yet."}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div className="relative flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setIsLabelMenuOpen((open) => !open)}
+              disabled={isDisabled}
+              className="icon-btn"
+              aria-label={`Manage labels for ${card.title}`}
+              aria-expanded={isLabelMenuOpen}
+              title="Labels"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83Z" />
+                <circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+            {isLabelMenuOpen ? (
+              <div className="absolute right-0 top-full z-10 mt-1 w-44 rounded-xl border border-[var(--stroke)] bg-white p-2 shadow-[var(--shadow-strong)]">
+                {labels.length === 0 ? (
+                  <p className="px-1 py-1 text-xs text-[var(--gray-text)]">
+                    No labels yet.
+                  </p>
+                ) : (
+                  labels.map((label) => {
+                    const isAssigned = card.labelIds.includes(label.id);
+                    return (
+                      <label
+                        key={label.id}
+                        className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs font-medium text-[var(--navy-dark)] hover:bg-[var(--surface)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isAssigned}
+                          disabled={isDisabled}
+                          onChange={() =>
+                            void onToggleLabel(card.id, label.id, !isAssigned)
+                          }
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        {label.name}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => {

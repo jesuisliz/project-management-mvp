@@ -1,12 +1,28 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cloneBoard } from "../src/test/boardFixture";
+import type { BoardData } from "../src/lib/kanban";
+
+const BOARD_ID = 1;
 
 test.beforeEach(async ({ page }) => {
   if (process.env.PLAYWRIGHT_BASE_URL) return;
 
   let authenticated = false;
-  const board = cloneBoard();
   let nextCardId = 1;
+  let nextBoardId = 2;
+  let nextLabelId = 1;
+  const boards = [{ id: BOARD_ID, name: "My Board" }];
+  const boardData: Record<number, BoardData> = { [BOARD_ID]: cloneBoard() };
+  const emptyColumns = cloneBoard().columns.map((column) => ({
+    id: column.id,
+    title: column.title,
+    cardIds: [] as string[],
+  }));
+  const emptyBoard = (): BoardData => ({
+    columns: emptyColumns.map((column) => ({ ...column, cardIds: [] })),
+    cards: {},
+    labels: [],
+  });
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -52,11 +68,49 @@ test.beforeEach(async ({ page }) => {
       });
       return;
     }
-    if (path === "/api/board" && method === "GET") {
+
+    if (path === "/api/boards" && method === "GET") {
+      await route.fulfill({ json: boards });
+      return;
+    }
+    if (path === "/api/boards" && method === "POST") {
+      const { name } = request.postDataJSON() as { name: string };
+      const id = nextBoardId++;
+      boards.push({ id, name });
+      boardData[id] = emptyBoard();
+      await route.fulfill({ status: 201, json: { id, name } });
+      return;
+    }
+
+    const boardIdMatch = path.match(/^\/api\/boards\/(\d+)(.*)$/);
+    if (!boardIdMatch) {
+      await route.fallback();
+      return;
+    }
+    const boardId = Number(boardIdMatch[1]);
+    const subPath = boardIdMatch[2];
+    const board = boardData[boardId];
+
+    if (subPath === "" && method === "GET") {
       await route.fulfill({ json: board });
       return;
     }
-    if (path === "/api/ai/chat" && method === "POST") {
+    if (subPath === "" && method === "PATCH") {
+      const { name } = request.postDataJSON() as { name: string };
+      const entry = boards.find((candidate) => candidate.id === boardId);
+      if (entry) entry.name = name;
+      await route.fulfill({ json: { id: boardId, name } });
+      return;
+    }
+    if (subPath === "" && method === "DELETE") {
+      const index = boards.findIndex((candidate) => candidate.id === boardId);
+      if (index !== -1) boards.splice(index, 1);
+      delete boardData[boardId];
+      await route.fulfill({ json: boards });
+      return;
+    }
+
+    if (subPath === "/ai/chat" && method === "POST") {
       const payload = request.postDataJSON() as {
         message: string;
         history: Array<{ role: "user" | "assistant"; content: string }>;
@@ -71,6 +125,7 @@ test.beforeEach(async ({ page }) => {
           id,
           title: "AI launch card",
           details: "Created through chat.",
+          labelIds: [],
         };
         board.columns[0].cardIds.push(id);
         reply = "I created the AI launch card in Backlog.";
@@ -107,7 +162,12 @@ test.beforeEach(async ({ page }) => {
       } else if (message.includes("create two follow-up cards")) {
         for (const title of ["AI follow-up one", "AI follow-up two"]) {
           const id = `card-playwright-${nextCardId++}`;
-          board.cards[id] = { id, title, details: "Created in one request." };
+          board.cards[id] = {
+            id,
+            title,
+            details: "Created in one request.",
+            labelIds: [],
+          };
           board.columns[0].cardIds.push(id);
         }
         reply = "I created both follow-up cards.";
@@ -126,7 +186,7 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
-    const columnMatch = path.match(/^\/api\/board\/columns\/([^/]+)$/);
+    const columnMatch = subPath.match(/^\/columns\/([^/]+)$/);
     if (columnMatch && method === "PATCH") {
       const { title } = request.postDataJSON() as { title: string };
       board.columns = board.columns.map((column) =>
@@ -138,14 +198,19 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
-    if (path === "/api/board/cards" && method === "POST") {
+    if (subPath === "/cards" && method === "POST") {
       const payload = request.postDataJSON() as {
         columnId: string;
         title: string;
         details: string;
       };
       const id = `card-playwright-${nextCardId++}`;
-      board.cards[id] = { id, title: payload.title, details: payload.details };
+      board.cards[id] = {
+        id,
+        title: payload.title,
+        details: payload.details,
+        labelIds: [],
+      };
       board.columns = board.columns.map((column) =>
         column.id === payload.columnId
           ? { ...column, cardIds: [...column.cardIds, id] }
@@ -155,7 +220,7 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
-    const moveMatch = path.match(/^\/api\/board\/cards\/([^/]+)\/move$/);
+    const moveMatch = subPath.match(/^\/cards\/([^/]+)\/move$/);
     if (moveMatch && method === "POST") {
       const cardId = decodeURIComponent(moveMatch[1]);
       const payload = request.postDataJSON() as {
@@ -176,14 +241,61 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
-    const cardMatch = path.match(/^\/api\/board\/cards\/([^/]+)$/);
+    const labelsMatch = subPath.match(/^\/cards\/([^/]+)\/labels$/);
+    if (labelsMatch && method === "PUT") {
+      const cardId = decodeURIComponent(labelsMatch[1]);
+      const { labelIds } = request.postDataJSON() as { labelIds: string[] };
+      board.cards[cardId] = { ...board.cards[cardId], labelIds };
+      await route.fulfill({ json: board });
+      return;
+    }
+
+    if (subPath === "/labels" && method === "POST") {
+      const { name, color } = request.postDataJSON() as {
+        name: string;
+        color: string;
+      };
+      const id = `label-${nextLabelId++}`;
+      board.labels.push({ id, name, color });
+      await route.fulfill({ status: 201, json: board });
+      return;
+    }
+
+    const labelMatch = subPath.match(/^\/labels\/([^/]+)$/);
+    if (labelMatch && method === "PATCH") {
+      const labelId = decodeURIComponent(labelMatch[1]);
+      const { name, color } = request.postDataJSON() as {
+        name: string;
+        color: string;
+      };
+      board.labels = board.labels.map((label) =>
+        label.id === labelId ? { id: labelId, name, color } : label
+      );
+      await route.fulfill({ json: board });
+      return;
+    }
+    if (labelMatch && method === "DELETE") {
+      const labelId = decodeURIComponent(labelMatch[1]);
+      board.labels = board.labels.filter((label) => label.id !== labelId);
+      for (const card of Object.values(board.cards)) {
+        card.labelIds = card.labelIds.filter((id) => id !== labelId);
+      }
+      await route.fulfill({ json: board });
+      return;
+    }
+
+    const cardMatch = subPath.match(/^\/cards\/([^/]+)$/);
     if (cardMatch && method === "PATCH") {
       const cardId = decodeURIComponent(cardMatch[1]);
       const payload = request.postDataJSON() as {
         title: string;
         details: string;
       };
-      board.cards[cardId] = { id: cardId, ...payload };
+      board.cards[cardId] = {
+        ...board.cards[cardId],
+        id: cardId,
+        ...payload,
+      };
       await route.fulfill({ json: board });
       return;
     }
@@ -371,8 +483,8 @@ test("holds a multi-turn chat and applies AI card changes", async ({ page }) => 
   await expect(page.getByText("AI follow-up one")).toBeVisible();
   await expect(page.getByText("AI follow-up two")).toBeVisible();
 
-  await page.evaluate(async () => {
-    const boardResponse = await fetch("/api/board");
+  await page.evaluate(async (boardId) => {
+    const boardResponse = await fetch(`/api/boards/${boardId}`);
     const board = (await boardResponse.json()) as {
       cards: Record<string, { title: string }>;
     };
@@ -380,12 +492,12 @@ test("holds a multi-turn chat and applies AI card changes", async ({ page }) => 
       .filter(([, card]) => card.title.toLowerCase().includes("ai "))
       .map(([cardId]) => cardId);
     for (const cardId of aiCardIds) {
-      const response = await fetch(`/api/board/cards/${cardId}`, {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}`, {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Unable to remove AI browser-test card");
     }
-  });
+  }, BOARD_ID);
 });
 
 test("logout clears the session-local conversation", async ({ page }) => {
@@ -462,14 +574,14 @@ test("reorders a card and persists across reload", async ({ page }) => {
   backlog = page.getByTestId("column-col-backlog");
   await expectCardOrder(backlog, ["card-2", "card-1"]);
 
-  await page.evaluate(async () => {
-    const response = await fetch("/api/board/cards/card-1/move", {
+  await page.evaluate(async (boardId) => {
+    const response = await fetch(`/api/boards/${boardId}/cards/card-1/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ columnId: "col-backlog", position: 0 }),
     });
     if (!response.ok) throw new Error("Unable to restore card order");
-  });
+  }, BOARD_ID);
   await page.reload();
   backlog = page.getByTestId("column-col-backlog");
   await expectCardOrder(backlog, ["card-1", "card-2"]);
@@ -483,15 +595,59 @@ test("moves a card between columns and persists across reload", async ({ page })
   await page.reload();
   await expect(page.getByTestId("column-col-review").getByTestId("card-card-1")).toBeVisible();
 
-  await page.evaluate(async () => {
-    const response = await fetch("/api/board/cards/card-1/move", {
+  await page.evaluate(async (boardId) => {
+    const response = await fetch(`/api/boards/${boardId}/cards/card-1/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ columnId: "col-backlog", position: 0 }),
     });
     if (!response.ok) throw new Error("Unable to restore card column");
-  });
+  }, BOARD_ID);
   await page.reload();
   const backlog = page.getByTestId("column-col-backlog");
   await expectCardOrder(backlog, ["card-1", "card-2"]);
+});
+
+test("creates, switches to, renames, and deletes a board", async ({ page }) => {
+  await signIn(page);
+
+  await page.getByRole("button", { name: "New board" }).click();
+  await page.getByLabel("New board name").fill("Second board");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByText("Align roadmap themes")).toBeHidden();
+  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+
+  await page.getByRole("button", { name: "Rename board" }).click();
+  await page.getByLabel("Board name").fill("Renamed board");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByLabel("Select a board")).toHaveValue("2");
+
+  await page.getByLabel("Select a board").selectOption({ label: "My Board" });
+  await expect(page.getByText("Align roadmap themes")).toBeVisible();
+
+  await page.getByLabel("Select a board").selectOption({ label: "Renamed board" });
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete board" }).click();
+  await expect(page.getByLabel("Select a board")).toHaveValue("1");
+});
+
+test("creates a label and assigns then removes it from a card", async ({ page }) => {
+  await signIn(page);
+
+  await page.getByRole("button", { name: "+ Label" }).click();
+  await page.getByLabel("New label name").fill("Urgent");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit Urgent label" })).toBeVisible();
+
+  const card = page.getByTestId("card-card-1");
+  const labelToggle = card.getByRole("button", { name: /manage labels/i });
+  await labelToggle.click();
+  await page.getByRole("checkbox", { name: "Urgent" }).click();
+  await labelToggle.click();
+  await expect(card.locator("span", { hasText: "Urgent" })).toBeVisible();
+
+  await labelToggle.click();
+  await page.getByRole("checkbox", { name: "Urgent" }).click();
+  await labelToggle.click();
+  await expect(card.locator("span", { hasText: "Urgent" })).toBeHidden();
 });

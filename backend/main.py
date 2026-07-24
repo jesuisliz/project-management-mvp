@@ -24,28 +24,44 @@ from backend.chat import (
     safety_identifier,
 )
 from backend.database import (
-    MVP_USERNAME,
     BoardNotFoundError,
     CardNotFoundError,
     ColumnNotFoundError,
     InvalidCardOperationError,
     InvalidMoveError,
+    LabelNotFoundError,
+    LastBoardError,
+    UsernameTakenError,
     apply_card_operations,
+    create_board,
     create_card,
+    create_label,
+    delete_board,
     delete_card,
+    delete_label,
     edit_card,
     get_board,
     initialize_database,
+    list_boards,
     move_card,
+    register_user,
+    rename_board,
     rename_column,
+    rename_label,
+    set_card_labels,
+    verify_login,
 )
 
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "frontend" / "out"
 SESSION_COOKIE = "pm_session"
 SESSION_MAX_AGE = 8 * 60 * 60
-MVP_PASSWORD = "password"
 DEFAULT_DATABASE_PATH = Path("data") / "pm.db"
+MAX_BOARD_NAME_LENGTH = 100
+MAX_LABEL_NAME_LENGTH = 40
+MAX_LABEL_COLOR_LENGTH = 20
+MAX_USERNAME_LENGTH = 60
+MAX_PASSWORD_LENGTH = 200
 
 active_sessions: dict[str, tuple[str, float]] = {}
 
@@ -74,6 +90,42 @@ DetailsText = Annotated[
     str,
     StringConstraints(max_length=MAX_CARD_DETAILS_LENGTH),
 ]
+BoardNameText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_BOARD_NAME_LENGTH,
+    ),
+]
+LabelNameText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_LABEL_NAME_LENGTH,
+    ),
+]
+LabelColorText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_LABEL_COLOR_LENGTH,
+    ),
+]
+UsernameText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=MAX_USERNAME_LENGTH,
+    ),
+]
+PasswordText = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=MAX_PASSWORD_LENGTH),
+]
 
 
 class ApiModel(BaseModel):
@@ -85,15 +137,27 @@ class LoginRequest(ApiModel):
     password: str
 
 
+class RegisterRequest(ApiModel):
+    username: UsernameText
+    password: PasswordText
+
+
 class SessionResponse(ApiModel):
     authenticated: bool
     username: str | None = None
+
+
+class LabelResponse(ApiModel):
+    id: str
+    name: str
+    color: str
 
 
 class CardResponse(ApiModel):
     id: str
     title: str
     details: str
+    label_ids: list[str] = Field(alias="labelIds")
 
 
 class ColumnResponse(ApiModel):
@@ -105,6 +169,20 @@ class ColumnResponse(ApiModel):
 class BoardResponse(ApiModel):
     columns: list[ColumnResponse]
     cards: dict[str, CardResponse]
+    labels: list[LabelResponse]
+
+
+class BoardSummaryResponse(ApiModel):
+    id: int
+    name: str
+
+
+class CreateBoardRequest(ApiModel):
+    name: BoardNameText
+
+
+class RenameBoardRequest(ApiModel):
+    name: BoardNameText
 
 
 class RenameColumnRequest(ApiModel):
@@ -125,6 +203,20 @@ class EditCardRequest(ApiModel):
 class MoveCardRequest(ApiModel):
     column_id: NonBlankText = Field(alias="columnId")
     position: NonNegativePosition
+
+
+class CreateLabelRequest(ApiModel):
+    name: LabelNameText
+    color: LabelColorText
+
+
+class RenameLabelRequest(ApiModel):
+    name: LabelNameText
+    color: LabelColorText
+
+
+class SetCardLabelsRequest(ApiModel):
+    label_ids: list[NonBlankText] = Field(alias="labelIds")
 
 
 class ChatHistoryMessage(ApiModel):
@@ -170,6 +262,20 @@ def _authenticated_username(request: Request) -> str:
     return username
 
 
+def _start_session(username: str, response: Response) -> None:
+    token = secrets.token_urlsafe(32)
+    active_sessions[token] = (username, time.time() + SESSION_MAX_AGE)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
+
+
 def create_app(
     database_path: str | Path | None = None,
     ai_service: AIService | None = None,
@@ -195,11 +301,29 @@ def create_app(
     def card_not_found(_: Request, __: CardNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": "Card not found"})
 
+    @api.exception_handler(LabelNotFoundError)
+    def label_not_found(_: Request, __: LabelNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Label not found"})
+
     @api.exception_handler(InvalidMoveError)
     def invalid_move(_: Request, __: InvalidMoveError) -> JSONResponse:
         return JSONResponse(
             status_code=400,
             content={"detail": "Invalid destination position"},
+        )
+
+    @api.exception_handler(LastBoardError)
+    def last_board(_: Request, __: LastBoardError) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Cannot delete your only board"},
+        )
+
+    @api.exception_handler(UsernameTakenError)
+    def username_taken(_: Request, __: UsernameTakenError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Username is already taken"},
         )
 
     @api.exception_handler(sqlite3.OperationalError)
@@ -213,32 +337,36 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @api.post("/auth/register", response_model=SessionResponse)
+    def register(
+        credentials: RegisterRequest,
+        response: Response,
+    ) -> SessionResponse:
+        register_user(
+            configured_database_path,
+            credentials.username,
+            credentials.password,
+        )
+        _start_session(credentials.username.strip(), response)
+        return SessionResponse(authenticated=True, username=credentials.username.strip())
+
     @api.post("/auth/login", response_model=SessionResponse)
     def login(
         credentials: LoginRequest,
         response: Response,
     ) -> SessionResponse:
-        if (
-            credentials.username != MVP_USERNAME
-            or credentials.password != MVP_PASSWORD
+        if not verify_login(
+            configured_database_path,
+            credentials.username,
+            credentials.password,
         ):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid username or password"},
             )
 
-        token = secrets.token_urlsafe(32)
-        active_sessions[token] = (MVP_USERNAME, time.time() + SESSION_MAX_AGE)
-        response.set_cookie(
-            key=SESSION_COOKIE,
-            value=token,
-            max_age=SESSION_MAX_AGE,
-            httponly=True,
-            samesite="lax",
-            secure=False,
-            path="/",
-        )
-        return SessionResponse(authenticated=True, username=MVP_USERNAME)
+        _start_session(credentials.username, response)
+        return SessionResponse(authenticated=True, username=credentials.username)
 
     @api.get("/auth/session", response_model=SessionResponse)
     def current_session(request: Request) -> SessionResponse:
@@ -266,18 +394,59 @@ def create_app(
         )
         return SessionResponse(authenticated=False)
 
-    @api.get("/board", response_model=BoardResponse)
-    def read_board(request: Request) -> dict[str, object]:
-        return get_board(
+    @api.get("/boards", response_model=list[BoardSummaryResponse])
+    def read_boards(request: Request) -> list[dict[str, object]]:
+        return list_boards(
             configured_database_path,
             _authenticated_username(request),
         )
 
+    @api.post("/boards", response_model=BoardSummaryResponse, status_code=201)
+    def add_board(
+        payload: CreateBoardRequest,
+        request: Request,
+    ) -> dict[str, object]:
+        return create_board(
+            configured_database_path,
+            _authenticated_username(request),
+            payload.name,
+        )
+
+    @api.patch("/boards/{board_id}", response_model=BoardSummaryResponse)
+    def update_board(
+        board_id: int,
+        payload: RenameBoardRequest,
+        request: Request,
+    ) -> dict[str, object]:
+        return rename_board(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+            payload.name,
+        )
+
+    @api.delete("/boards/{board_id}", response_model=list[BoardSummaryResponse])
+    def remove_board(board_id: int, request: Request) -> list[dict[str, object]]:
+        return delete_board(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+        )
+
+    @api.get("/boards/{board_id}", response_model=BoardResponse)
+    def read_board(board_id: int, request: Request) -> dict[str, object]:
+        return get_board(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+        )
+
     @api.patch(
-        "/board/columns/{column_id}",
+        "/boards/{board_id}/columns/{column_id}",
         response_model=BoardResponse,
     )
     def update_column(
+        board_id: int,
         column_id: str,
         payload: RenameColumnRequest,
         request: Request,
@@ -285,25 +454,31 @@ def create_app(
         return rename_column(
             configured_database_path,
             _authenticated_username(request),
+            board_id,
             column_id,
             payload.title,
         )
 
-    @api.post("/board/cards", response_model=BoardResponse, status_code=201)
+    @api.post(
+        "/boards/{board_id}/cards", response_model=BoardResponse, status_code=201
+    )
     def add_card(
+        board_id: int,
         payload: CreateCardRequest,
         request: Request,
     ) -> dict[str, object]:
         return create_card(
             configured_database_path,
             _authenticated_username(request),
+            board_id,
             payload.column_id,
             payload.title,
             payload.details,
         )
 
-    @api.patch("/board/cards/{card_id}", response_model=BoardResponse)
+    @api.patch("/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
     def update_card(
+        board_id: int,
         card_id: str,
         payload: EditCardRequest,
         request: Request,
@@ -311,21 +486,31 @@ def create_app(
         return edit_card(
             configured_database_path,
             _authenticated_username(request),
+            board_id,
             card_id,
             payload.title,
             payload.details,
         )
 
-    @api.delete("/board/cards/{card_id}", response_model=BoardResponse)
-    def remove_card(card_id: str, request: Request) -> dict[str, object]:
+    @api.delete("/boards/{board_id}/cards/{card_id}", response_model=BoardResponse)
+    def remove_card(
+        board_id: int,
+        card_id: str,
+        request: Request,
+    ) -> dict[str, object]:
         return delete_card(
             configured_database_path,
             _authenticated_username(request),
+            board_id,
             card_id,
         )
 
-    @api.post("/board/cards/{card_id}/move", response_model=BoardResponse)
+    @api.post(
+        "/boards/{board_id}/cards/{card_id}/move",
+        response_model=BoardResponse,
+    )
     def relocate_card(
+        board_id: int,
         card_id: str,
         payload: MoveCardRequest,
         request: Request,
@@ -333,19 +518,93 @@ def create_app(
         return move_card(
             configured_database_path,
             _authenticated_username(request),
+            board_id,
             card_id,
             payload.column_id,
             payload.position,
         )
 
+    @api.put(
+        "/boards/{board_id}/cards/{card_id}/labels",
+        response_model=BoardResponse,
+    )
+    def update_card_labels(
+        board_id: int,
+        card_id: str,
+        payload: SetCardLabelsRequest,
+        request: Request,
+    ) -> dict[str, object]:
+        return set_card_labels(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+            card_id,
+            payload.label_ids,
+        )
+
     @api.post(
-        "/ai/chat",
+        "/boards/{board_id}/labels", response_model=BoardResponse, status_code=201
+    )
+    def add_label(
+        board_id: int,
+        payload: CreateLabelRequest,
+        request: Request,
+    ) -> dict[str, object]:
+        return create_label(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+            payload.name,
+            payload.color,
+        )
+
+    @api.patch(
+        "/boards/{board_id}/labels/{label_id}",
+        response_model=BoardResponse,
+    )
+    def update_label(
+        board_id: int,
+        label_id: str,
+        payload: RenameLabelRequest,
+        request: Request,
+    ) -> dict[str, object]:
+        return rename_label(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+            label_id,
+            payload.name,
+            payload.color,
+        )
+
+    @api.delete(
+        "/boards/{board_id}/labels/{label_id}",
+        response_model=BoardResponse,
+    )
+    def remove_label(
+        board_id: int,
+        label_id: str,
+        request: Request,
+    ) -> dict[str, object]:
+        return delete_label(
+            configured_database_path,
+            _authenticated_username(request),
+            board_id,
+            label_id,
+        )
+
+    @api.post(
+        "/boards/{board_id}/ai/chat",
         response_model=ChatResponse,
         response_model_exclude_none=True,
     )
-    def chat(payload: ChatRequest, request: Request) -> ChatResponse:
+    def chat(
+        board_id: int,
+        payload: ChatRequest,
+        request: Request,
+    ) -> ChatResponse:
         username = _authenticated_username(request)
-        board = get_board(configured_database_path, username)
+        board = get_board(configured_database_path, username, board_id)
 
         try:
             service = ai_service or AIService.from_environment()
@@ -380,6 +639,7 @@ def create_app(
             updated_board = apply_card_operations(
                 configured_database_path,
                 username,
+                board_id,
                 operations,
             )
         except (
@@ -411,12 +671,7 @@ def create_app(
     @application.middleware("http")
     async def protect_authenticated_api(request: Request, call_next):
         path = request.url.path
-        is_protected = (
-            path == "/api/board"
-            or path.startswith("/api/board/")
-            or path == "/api/ai"
-            or path.startswith("/api/ai/")
-        )
+        is_protected = path == "/api/boards" or path.startswith("/api/boards/")
         if is_protected:
             if _resolve_session(request.cookies.get(SESSION_COOKIE)) is None:
                 return JSONResponse(

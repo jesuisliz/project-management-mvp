@@ -1,11 +1,11 @@
 {
   "name": "project_management_mvp",
-  "version": 1,
+  "version": 2,
   "engine": "SQLite",
   "tables": [
     {
       "name": "users",
-      "purpose": "Board ownership; authentication credentials are not stored here.",
+      "purpose": "Account identity and hashed credentials; owns zero-or-more boards.",
       "columns": [
         {
           "name": "id",
@@ -17,6 +17,12 @@
           "name": "username",
           "type": "TEXT",
           "nullable": false
+        },
+        {
+          "name": "password_hash",
+          "type": "TEXT",
+          "nullable": false,
+          "note": "Salted PBKDF2-HMAC-SHA256, formatted as 'iterations$salt_hex$hash_hex'."
         }
       ],
       "primary_key": ["id"],
@@ -42,7 +48,7 @@
     },
     {
       "name": "boards",
-      "purpose": "The single board owned by a user.",
+      "purpose": "A named board owned by a user; a user may own multiple boards.",
       "columns": [
         {
           "name": "id",
@@ -54,16 +60,21 @@
           "name": "user_id",
           "type": "INTEGER",
           "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false
         }
       ],
       "primary_key": ["id"],
-      "unique_constraints": [
+      "unique_constraints": [],
+      "check_constraints": [
         {
-          "name": "uq_boards_user_id",
-          "columns": ["user_id"]
+          "name": "ck_boards_name_not_blank",
+          "expression": "length(trim(name)) > 0"
         }
       ],
-      "check_constraints": [],
       "foreign_keys": [
         {
           "columns": ["user_id"],
@@ -74,12 +85,7 @@
           "on_delete": "CASCADE"
         }
       ],
-      "indexes": [
-        {
-          "source": "unique_constraint",
-          "columns": ["user_id"]
-        }
-      ]
+      "indexes": []
     },
     {
       "name": "columns",
@@ -225,10 +231,113 @@
           "columns": ["board_id", "column_id", "position"]
         }
       ]
+    },
+    {
+      "name": "labels",
+      "purpose": "A board-scoped catalog of colored labels.",
+      "columns": [
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "id",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "color",
+          "type": "TEXT",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["board_id", "id"],
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_labels_name_not_blank",
+          "expression": "length(trim(name)) > 0"
+        },
+        {
+          "name": "ck_labels_color_not_blank",
+          "expression": "length(trim(color)) > 0"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": ["board_id"],
+          "references": {
+            "table": "boards",
+            "columns": ["id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "source": "primary_key",
+          "columns": ["board_id", "id"]
+        }
+      ]
+    },
+    {
+      "name": "card_labels",
+      "purpose": "Join table assigning labels to cards, both scoped to the same board.",
+      "columns": [
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "card_id",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "label_id",
+          "type": "TEXT",
+          "nullable": false
+        }
+      ],
+      "primary_key": ["board_id", "card_id", "label_id"],
+      "unique_constraints": [],
+      "check_constraints": [],
+      "foreign_keys": [
+        {
+          "columns": ["board_id", "card_id"],
+          "references": {
+            "table": "cards",
+            "columns": ["board_id", "id"]
+          },
+          "on_delete": "CASCADE"
+        },
+        {
+          "columns": ["board_id", "label_id"],
+          "references": {
+            "table": "labels",
+            "columns": ["board_id", "id"]
+          },
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "source": "primary_key",
+          "columns": ["board_id", "card_id", "label_id"]
+        }
+      ]
     }
   ],
   "service_invariants": {
-    "one_board_per_user": true,
+    "one_board_per_user": false,
+    "last_board_deletion": "Rejected; every user must retain at least one board.",
     "fixed_column_ids": [
       "col-backlog",
       "col-discovery",
@@ -239,13 +348,15 @@
     "fixed_column_count": 5,
     "column_mutations": ["rename"],
     "card_positions": "Zero-based and contiguous within each column after every committed mutation.",
-    "identifiers": "Column and card IDs are stable and scoped to a board.",
-    "timestamps": "Omitted because no MVP behavior consumes them."
+    "identifiers": "Column, card, and label IDs are stable and scoped to a board. Board IDs are stable integers scoped to a user.",
+    "timestamps": "Omitted because no MVP behavior consumes them.",
+    "ai_operations": "The AI may create, edit, and move/reorder cards only; it cannot manage boards, columns, or labels."
   },
   "initialization": {
     "mvp_username": "user",
+    "mvp_seed_password": "password",
     "template": "docs/sample-board.json",
-    "rule": "Create the user if absent and create the complete template only when that user has no board; never reseed an existing board."
+    "rule": "Create the seeded demo user (with the demo cards) if absent; self-registered users get one empty board with the fixed columns and no demo cards. Never reseed an existing board."
   },
   "storage": {
     "configuration": "DATABASE_PATH",

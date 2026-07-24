@@ -341,3 +341,81 @@ Add a polished, accessible AI chat sidebar that maintains the current conversati
 - AI changes appear automatically and match the persisted database state.
 - The final application runs locally in one Docker container using the provided platform scripts.
 - All automated tests pass, the opt-in live test is reported separately, and the user accepts the completed MVP.
+
+## Part 11: Real user accounts
+
+### Goal
+
+Replace the hardcoded `user`/`password` credential with self-service registration and DB-backed login, so the app supports real, independent user accounts.
+
+### Checklist
+
+- [x] Add a `password_hash` column to `users` and a salted-hash helper using the Python standard library (`hashlib.pbkdf2_hmac`) so no new dependency is required.
+- [x] Add `POST /api/auth/register` that creates a user with a hashed password, rejects blank/duplicate usernames and blank passwords, and provisions that user's first board.
+- [x] Replace the hardcoded login check with a DB lookup that verifies the submitted password against the stored hash.
+- [x] Keep the existing opaque in-memory session mechanism; only the credential check changes.
+- [x] Add a registration form to the frontend alongside the existing login form.
+- [x] Update backend and frontend tests for registration, duplicate-username rejection, and DB-backed login.
+
+### Tests
+
+- Backend: register creates a working account; duplicate username is rejected; blank username/password is rejected; login succeeds only against the stored hash; the legacy hardcoded password no longer works for a freshly registered user.
+- Frontend: registration form validation, duplicate-username error, and successful registration leading into the board.
+
+### Success criteria
+
+- Multiple independent users can register and sign in with their own credentials.
+- Passwords are never stored or logged in plain text.
+- All Part 11 tests pass.
+
+## Part 12: Multiple boards per user
+
+### Goal
+
+Let each user own multiple named Kanban boards instead of exactly one, with a way to switch, create, rename, and delete boards.
+
+### Checklist
+
+- [x] Remove the one-board-per-user unique constraint and add a `name` column to `boards`.
+- [x] Add `GET/POST /api/boards` (list, create) and `PATCH/DELETE /api/boards/{board_id}` (rename, delete), scoped to the authenticated user.
+- [x] Re-scope the existing column/card/AI-chat routes under `/api/boards/{board_id}/...`, validating that `board_id` belongs to the authenticated user before any read or write.
+- [x] Keep the fixed five-column layout per board; only the number of boards changes.
+- [x] Prevent deleting a user's last remaining board.
+- [x] Add a frontend board switcher (list, select, create, rename, delete) and update the API client and board component to operate against the selected board.
+- [x] Update backend and frontend tests for multi-board ownership, switching, and the last-board-deletion guard.
+
+### Tests
+
+- Backend: a user can create additional boards; board routes reject a board ID owned by another user; deleting the last board is rejected; deleting a non-last board succeeds and its cards are gone.
+- Frontend: switching boards loads the right columns/cards; creating/renaming/deleting a board updates the switcher and board view; AI chat operates on the currently selected board.
+
+### Success criteria
+
+- A user can hold and independently edit more than one board.
+- No route ever exposes or mutates another user's board.
+- All Part 12 tests pass.
+
+## Part 13: Card labels
+
+### Goal
+
+Let cards carry an optional small set of colored labels for lightweight categorization, without expanding scope beyond that.
+
+### Checklist
+
+- [x] Add a `labels` table (board-scoped label catalog: id, board_id, name, color) and a `card_labels` join table.
+- [x] Add board-scoped label CRUD routes and include each card's label IDs in the board response.
+- [x] Let the AI chat operations continue to work unchanged; labels are a manual-only feature for this part.
+- [x] Add frontend UI to assign/remove labels on a card and manage a board's label catalog.
+- [x] Update backend and frontend tests for label CRUD, card label assignment, and board-response shape.
+
+### Tests
+
+- Backend: create/rename/delete a label; assign/remove a label on a card; deleting a label removes it from cards that had it; labels are scoped to their board.
+- Frontend: label picker on a card, label catalog management, and label chips rendering on cards.
+
+### Success criteria
+
+- Cards can carry zero or more labels scoped to their board.
+- Label management does not affect existing column/card/AI behavior.
+- All Part 13 tests pass.

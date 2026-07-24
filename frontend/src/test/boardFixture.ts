@@ -17,43 +17,52 @@ export const sampleBoard: BoardData = {
       id: "card-1",
       title: "Align roadmap themes",
       details: "Draft quarterly themes with impact statements and metrics.",
+      labelIds: [],
     },
     "card-2": {
       id: "card-2",
       title: "Gather customer signals",
       details: "Review support tags, sales notes, and churn feedback.",
+      labelIds: [],
     },
     "card-3": {
       id: "card-3",
       title: "Prototype analytics view",
       details: "Sketch initial dashboard layout and key drill-downs.",
+      labelIds: [],
     },
     "card-4": {
       id: "card-4",
       title: "Refine status language",
       details: "Standardize column labels and tone across the board.",
+      labelIds: [],
     },
     "card-5": {
       id: "card-5",
       title: "Design card layout",
       details: "Add hierarchy and spacing for scanning dense lists.",
+      labelIds: [],
     },
     "card-6": {
       id: "card-6",
       title: "QA micro-interactions",
       details: "Verify hover, focus, and loading states.",
+      labelIds: [],
     },
     "card-7": {
       id: "card-7",
       title: "Ship marketing page",
       details: "Final copy approved and asset pack delivered.",
+      labelIds: [],
     },
     "card-8": {
       id: "card-8",
       title: "Close onboarding sprint",
       details: "Document release notes and share internally.",
+      labelIds: [],
     },
   },
+  labels: [],
 };
 
 export const cloneBoard = () => structuredClone(sampleBoard);

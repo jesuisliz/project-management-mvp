@@ -22,21 +22,29 @@ sh scripts/stop.sh
 
 Open `http://localhost:8000` after starting.
 
-Sign in with:
+Sign in with the built-in demo account, or create your own:
 
 - Username: `user`
 - Password: `password`
 
-This is local MVP authentication only. Sessions are kept in server memory and
-are not intended for production use.
+New accounts can be created from the sign-in page. Passwords are hashed
+(salted PBKDF2) before being stored; this is still local MVP authentication,
+and sessions are kept in server memory and are not intended for production
+use.
 
 Board data is stored in SQLite on the Compose-managed `pm-data` volume and
-persists when the application container is stopped or recreated.
+persists when the application container is stopped or recreated. Each user
+can hold multiple named boards; a board switcher in the header lets you
+create, rename, switch between, and delete boards (a user's last board cannot
+be deleted).
 
-Column renames and card creation, inline editing, deletion, reordering, and
-cross-column movement are saved through the authenticated board API. The AI
+Column renames and card creation, inline editing, deletion, reordering,
+cross-column movement, and label assignment are saved through the
+authenticated board API. Labels are a per-board catalog of colored tags you
+can create, rename, delete, and assign to or remove from cards. The AI
 Assistant sidebar can answer questions and create, edit, move, or reorder one
-or more cards. It cannot delete cards or change the fixed columns.
+or more cards on the currently selected board. It cannot delete cards, change
+the fixed columns, or manage labels.
 
 ## OpenAI configuration
 
@@ -50,8 +58,8 @@ OPENAI_MODEL=gpt-5.6-terra
 
 `OPENAI_MODEL` is optional and defaults to `gpt-5.6-terra`. The key is passed to
 the container at runtime and is not included in the image. The authenticated
-chat backend is available at `POST /api/ai/chat`. See `docs/CHAT_API.md` for its
-request and response contract.
+chat backend is available at `POST /api/boards/{boardId}/ai/chat`. See
+`docs/CHAT_API.md` for its request and response contract.
 
 Chat messages are kept only in the current page session. They clear on logout
 or reload and are never written to SQLite. AI board changes are validated and
@@ -84,5 +92,5 @@ billable live connectivity test explicitly:
 docker run --rm --env-file .env --env RUN_OPENAI_LIVE_TEST=1 project-management-mvp-test uv run --no-sync pytest backend/tests/test_ai_live.py
 ```
 
-The MVP is intended for local use. Authentication is hardcoded, sessions are
-stored in process memory, and each signed-in user has one board.
+The MVP is intended for local use. Sessions are stored in process memory and
+reset on restart; this is not production-grade identity management.

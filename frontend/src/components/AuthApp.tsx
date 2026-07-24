@@ -39,10 +39,16 @@ type LoginFormProps = {
 };
 
 const LoginForm = ({ onSignedIn }: LoginFormProps) => {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const switchMode = (nextMode: "login" | "register") => {
+    setMode(nextMode);
+    setError(null);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,17 +61,28 @@ const LoginForm = ({ onSignedIn }: LoginFormProps) => {
 
     setIsSubmitting(true);
     try {
-      const session = await sessionApi.login(username.trim(), password);
+      const session =
+        mode === "login"
+          ? await sessionApi.login(username.trim(), password)
+          : await sessionApi.register(username.trim(), password);
       if (!session.authenticated || !session.username) {
         throw new Error("Login response was not authenticated");
       }
       onSignedIn(session.username);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (mode === "login" && error instanceof ApiError && error.status === 401) {
         setError("Invalid username or password.");
         return;
       }
-      setError("Unable to sign in. Check that the server is running.");
+      if (mode === "register" && error instanceof ApiError && error.status === 409) {
+        setError("That username is already taken.");
+        return;
+      }
+      setError(
+        mode === "login"
+          ? "Unable to sign in. Check that the server is running."
+          : "Unable to create your account. Check that the server is running."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -106,13 +123,48 @@ const LoginForm = ({ onSignedIn }: LoginFormProps) => {
             Local workspace
           </p>
           <h2 className="mt-3 font-display text-3xl font-semibold text-[var(--navy-dark)]">
-            Sign in
+            {mode === "login" ? "Sign in" : "Create your account"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
-            Enter the MVP account credentials to open your board.
+            {mode === "login"
+              ? "Enter your account credentials to open your boards."
+              : "Choose a username and password to start your own workspace."}
           </p>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
+          <div
+            role="tablist"
+            aria-label="Sign in or create an account"
+            className="mt-6 inline-flex rounded-full border border-[var(--stroke)] bg-[var(--surface)] p-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "login"}
+              onClick={() => switchMode("login")}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                mode === "login"
+                  ? "bg-white text-[var(--navy-dark)] shadow-[var(--shadow)]"
+                  : "text-[var(--gray-text)]"
+              }`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "register"}
+              onClick={() => switchMode("register")}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                mode === "register"
+                  ? "bg-white text-[var(--navy-dark)] shadow-[var(--shadow)]"
+                  : "text-[var(--gray-text)]"
+              }`}
+            >
+              Create account
+            </button>
+          </div>
+
+          <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
             <div>
               <label
                 htmlFor="username"
@@ -142,7 +194,9 @@ const LoginForm = ({ onSignedIn }: LoginFormProps) => {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
                 className="mt-2 w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] focus:bg-white focus:ring-3 focus:ring-[rgba(32,157,215,0.14)]"
               />
             </div>
@@ -161,7 +215,13 @@ const LoginForm = ({ onSignedIn }: LoginFormProps) => {
               disabled={isSubmitting}
               className="w-full rounded-xl bg-[var(--secondary-purple)] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(117,57,145,0.24)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting
+                ? mode === "login"
+                  ? "Signing in..."
+                  : "Creating account..."
+                : mode === "login"
+                  ? "Sign in"
+                  : "Create account"}
             </button>
           </form>
         </div>

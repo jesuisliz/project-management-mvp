@@ -1,8 +1,9 @@
 # Chat API
 
-`POST /api/ai/chat` requires the HTTP-only session cookie. The server loads the
-signed-in user's canonical board; clients never send a board, user ID, or board
-ID.
+`POST /api/boards/{boardId}/ai/chat` requires the HTTP-only session cookie.
+The server verifies `boardId` belongs to the signed-in user, then loads that
+board's canonical state; clients never send a board or user ID, and a
+`boardId` owned by another user returns 404.
 
 Request:
 
@@ -30,9 +31,10 @@ Reply-only response:
 
 When the assistant changes cards, `boardChanged` is true and `board` contains
 the updated canonical board. The model may create, edit, move, or reorder cards;
-it cannot delete cards or change the fixed columns. All returned operations are
-validated for the signed-in user's board and committed in one transaction. One
-invalid operation rejects and rolls back the full batch.
+it cannot delete cards, change the fixed columns, or assign/remove labels
+(labels are a manual-only feature). All returned operations are validated for
+the signed-in user's board and committed in one transaction. One invalid
+operation rejects and rolls back the full batch.
 
 OpenAI Responses are parsed against the backend's Pydantic schema with
 `store=false`. Provider, parsing, and invalid-operation failures return concise
